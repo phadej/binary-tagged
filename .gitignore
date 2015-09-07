@@ -2,4 +2,5 @@ dist/
 .stack-work/
 .cabal-sandbox
 cabal.sandbox.config
+bench.html
 
