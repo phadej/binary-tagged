@@ -122,6 +122,7 @@ import qualified Data.Array.Unboxed as Array
 import qualified Data.IntMap as IntMap
 import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
+import qualified Data.Ratio as Ratio
 import qualified Data.Sequence as Seq
 import qualified Data.Set as Set
 import qualified Data.HashSet as HS
@@ -337,6 +338,7 @@ type SumUpTo (n :: Nat) = n * (n - 1)
 instance HasStructuralInfo Bool where structuralInfo = ghcNominalType
 instance HasStructuralInfo Char where structuralInfo = ghcNominalType
 instance HasStructuralInfo Int where structuralInfo = ghcNominalType
+instance HasStructuralInfo Word where structuralInfo _ = NominalType "Word"
 instance HasStructuralInfo Integer where structuralInfo _ = NominalType "Integer"
 
 instance HasStructuralInfo Int8 where structuralInfo _ = NominalType "Int8"
@@ -349,6 +351,22 @@ instance HasStructuralInfo Word16 where structuralInfo _ = NominalType "Word16"
 instance HasStructuralInfo Word32 where structuralInfo _ = NominalType "Word32"
 instance HasStructuralInfo Word64 where structuralInfo _ = NominalType "Word64"
 
+instance HasSemanticVersion Bool
+instance HasSemanticVersion Char
+instance HasSemanticVersion Int
+instance HasSemanticVersion Word
+instance HasSemanticVersion Integer
+
+instance HasSemanticVersion Int8
+instance HasSemanticVersion Int16
+instance HasSemanticVersion Int32
+instance HasSemanticVersion Int64
+
+instance HasSemanticVersion Word8
+instance HasSemanticVersion Word16
+instance HasSemanticVersion Word32
+instance HasSemanticVersion Word64
+
 -- Recursive types
 instance HasStructuralInfo a => HasStructuralInfo [a] where structuralInfo = ghcStructuralInfo1
 instance HasSemanticVersion a => HasSemanticVersion [a] where
@@ -358,6 +376,11 @@ instance HasSemanticVersion a => HasSemanticVersion [a] where
 instance HasStructuralInfo a => HasStructuralInfo (Maybe a)
 instance HasSemanticVersion a => HasSemanticVersion (Maybe a) where
   type SemanticVersion (Maybe a) = SemanticVersion a
+
+instance HasStructuralInfo a => HasStructuralInfo (Ratio.Ratio a) where
+  structuralInfo _ = NominalNewtype "Ratio" $ structuralInfo (Proxy :: Proxy a)
+instance HasSemanticVersion a => HasSemanticVersion (Ratio.Ratio a) where
+  type SemanticVersion (Ratio.Ratio a) = SemanticVersion a
 
 instance (HasStructuralInfo a, HasStructuralInfo b) => HasStructuralInfo (Either a b)
 instance (HasSemanticVersion a, HasSemanticVersion b, KnownNat (SemanticVersion (Either a b))) => HasSemanticVersion (Either a b) where
