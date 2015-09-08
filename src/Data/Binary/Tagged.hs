@@ -8,6 +8,7 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -16,40 +17,88 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
+-- We need this for Interleave
+{-# LANGUAGE UndecidableInstances #-}
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Data.Binary.Tagged
+-- Copyright   :  (C) 2015 Oleg Grenrus
+-- License     :  BSD3
+-- Maintainer  :  Oleg Grenrus <oleg.grenrus@iki.fi>
+--
+-- Structurally tag binary serialisation stream.
+--
+-- Say you have:
+--
+-- > data Record = Record
+-- >   { _recordFields :: HM.HashMap Text (Integer, ByteString)
+-- >   , _recordEnabled :: Bool
+-- >   }
+-- >   deriving (Eq, Show, Generic)
+-- >
+-- > instance Binary Record
+-- > instance HasStructuralInfo Record
+-- > instance HasSemanticVersion Record
+--
+-- then you can serialise and deserialise @Record@ values with a structure tag by simply
+--
+-- > encodeTaggedFile "cachefile" record
+-- > decodeTaggedFile "cachefile" :: IO Record
+--
+-- If structure of @Record@ changes in between, deserialisation will fail early.
 module Data.Binary.Tagged
   (
   -- * Data
   BinaryTagged(..),
-  binaryTagged,
-  NominalSop(..),
+  BinaryTagged',
+  binaryTag,
+  binaryTag',
+  binaryUntag,
+  binaryUntag',
+  StructuralInfo(..),
+  -- * Serialisation
+  taggedEncode,
+  taggedDecode,
+  taggedDecodeOrFail,
+  -- * IO functions for serialisation
+  taggedEncodeFile,
+  taggedDecodeFile,
+  taggedDecodeFileOrFail,
   -- * Class
-  HasNominalSop(..),
+  HasStructuralInfo(..),
+  HasSemanticVersion(..),
+  Version,
+  -- ** Type level calculations
+  Interleave,
+  SumUpTo,
   -- * Generic derivation
-  ghcNominalSop,
+  -- ** GHC
+  ghcStructuralInfo,
   ghcNominalType,
-  ghcNominalSop1,
-  sopNominalSop,
-  sopNominalSopS,
+  ghcStructuralInfo1,
+  -- ** SOP
+  sopStructuralInfo,
   sopNominalType,
+  sopStructuralInfo1,
+  -- ** SOP direct
+  sopStructuralInfoS,
   sopNominalTypeS,
-  sopNominalSop1,
-  sopNominalSop1S,
+  sopStructuralInfo1S,
   -- * Hash
-  nominalSopSha1Digest,
+  structuralInfoSha1Digest,
+  structuralInfoSha1ByteStringDigest,
   ) where
 
 import           Control.Applicative
 import           Control.Monad
 import           Data.Binary
+import           Data.Binary.Get (ByteOffset)
 import           Data.ByteString as BS
-import           Data.ByteString.Builder
 import           Data.ByteString.Lazy as LBS
 import           Data.Digest.Pure.SHA
-import           Data.Foldable (Foldable, foldMap)
-import           Data.List as List
+import           Data.Foldable (Foldable)
 import           Data.Monoid ((<>))
 import           Data.Proxy
-import           Data.String.UTF8
 import           Data.Traversable (Traversable)
 import           Generics.SOP as SOP
 import           Generics.SOP.GGP as SOP
@@ -58,20 +107,73 @@ import qualified GHC.Generics as GHC
 import           GHC.TypeLits
 
 -- Instances
+import qualified Data.Vector as V
+import qualified Data.Aeson as Aeson
 import qualified Data.Monoid as Monoid
 import           Data.Int
 import qualified Data.Text as S
 import qualified Data.Text.Lazy as L
+import qualified Data.Array.IArray as Array
+import qualified Data.Array.Unboxed as Array
+import qualified Data.IntMap as IntMap
+import qualified Data.IntSet as IntSet
+import qualified Data.Map as Map
+import qualified Data.Sequence as Seq
+import qualified Data.Set as Set
+import qualified Data.HashSet as HS
+import qualified Data.HashMap.Lazy as HML
+import qualified Data.Time as Time
+import qualified Data.Vector.Unboxed as U
+import qualified Data.Vector.Storable as S
+
 
 -- | 'Binary' serialisable class, which tries to be less error-prone to data structure changes.
 --
--- Values are serialised with header consisting of version @v@ and hash of 'nominalSop'.
+-- Values are serialised with header consisting of version @v@ and hash of 'structuralInfo'.
 newtype BinaryTagged (v :: k) a = BinaryTagged { unBinaryTagged :: a }
   deriving (Eq, Ord, Show, Read, Functor, Foldable, Traversable, GHC.Generic, GHC.Generic1)
 -- TODO: Derive Enum, Bounded, Typeable, Data, Hashable, NFData, Numeric classes?
 
-binaryTagged :: Proxy v -> a -> BinaryTagged v a
-binaryTagged _ = BinaryTagged
+type BinaryTagged' a = BinaryTagged (SemanticVersion a) a
+
+binaryTag :: Proxy v -> a -> BinaryTagged v a
+binaryTag _ = BinaryTagged
+
+binaryTag' :: HasSemanticVersion a => a -> BinaryTagged' a
+binaryTag' = BinaryTagged
+
+binaryUntag :: Proxy v -> BinaryTagged v a -> a
+binaryUntag _ = unBinaryTagged
+
+binaryUntag' :: HasSemanticVersion a => BinaryTagged' a -> a
+binaryUntag' = unBinaryTagged
+
+-- | Tagged version of 'encode'
+taggedEncode ::  forall a. (HasStructuralInfo a, HasSemanticVersion a, Binary a) => a -> LBS.ByteString
+taggedEncode = encode . binaryTag (Proxy :: Proxy (SemanticVersion a))
+
+-- | Tagged version of 'decode'
+taggedDecode :: forall a. (HasStructuralInfo a, HasSemanticVersion a, Binary a) => LBS.ByteString -> a
+taggedDecode = binaryUntag (Proxy :: Proxy (SemanticVersion a)) . decode
+
+-- | Tagged version of 'decodeOrFail'
+taggedDecodeOrFail :: forall a. (HasStructuralInfo a, HasSemanticVersion a, Binary a)
+                   => LBS.ByteString
+                   -> Either (LBS.ByteString, ByteOffset, String) (LBS.ByteString, ByteOffset, a)
+taggedDecodeOrFail = fmap3 (binaryUntag (Proxy :: Proxy (SemanticVersion a))) . decodeOrFail
+  where fmap3 f = fmap (\(a, b, c) -> (a, b, f c))
+
+-- | Tagged version of 'encodeFile'
+taggedEncodeFile :: forall a. (HasStructuralInfo a, HasSemanticVersion a, Binary a) => FilePath -> a -> IO ()
+taggedEncodeFile filepath = encodeFile filepath . binaryTag (Proxy :: Proxy (SemanticVersion a))
+
+-- | Tagged version of 'decodeFile'
+taggedDecodeFile :: forall a. (HasStructuralInfo a, HasSemanticVersion a, Binary a) => FilePath -> IO a
+taggedDecodeFile = fmap (binaryUntag (Proxy :: Proxy (SemanticVersion a))) . decodeFile
+
+-- | Tagged version of 'decodeFileOrFail'
+taggedDecodeFileOrFail :: forall a. (HasStructuralInfo a, HasSemanticVersion a, Binary a) => FilePath -> IO (Either (ByteOffset, String) a)
+taggedDecodeFileOrFail = (fmap . fmap) (binaryUntag (Proxy :: Proxy (SemanticVersion a))) . decodeFileOrFail
 
 instance Applicative (BinaryTagged v) where
   pure = return
@@ -85,14 +187,17 @@ instance Monoid.Monoid a => Monoid.Monoid (BinaryTagged v a) where
   mempty   = pure Monoid.mempty
   mappend  = liftA2 Monoid.mappend
 
+-- | Type the semantic version is serialised with.
+type Version = Word32
+
 -- | Version and structure hash are prepended to serialised stream
-instance (Binary a, HasNominalSop a, KnownNat v) => Binary (BinaryTagged v a) where
+instance (Binary a, HasStructuralInfo a, KnownNat v) => Binary (BinaryTagged v a) where
   put (BinaryTagged x) = put ver' >> put hash' >> put x
     where
       proxyV = Proxy :: Proxy v
       proxyA = Proxy :: Proxy a
-      ver' = fromIntegral (natVal proxyV) :: Int
-      hash' = bytestringDigest . nominalSopSha1Digest . nominalSop $ proxyA
+      ver' = fromIntegral (natVal proxyV) :: Version
+      hash' = structuralInfoSha1ByteStringDigest . structuralInfo $ proxyA
 
   get = do
       ver <- get
@@ -105,98 +210,96 @@ instance (Binary a, HasNominalSop a, KnownNat v) => Binary (BinaryTagged v a) wh
     where
       proxyV = Proxy :: Proxy v
       proxyA = Proxy :: Proxy a
-      ver' = fromIntegral (natVal proxyV) :: Int
-      hash' = bytestringDigest . nominalSopSha1Digest . nominalSop $ proxyA
+      ver' = fromIntegral (natVal proxyV) :: Version
+      hash' = bytestringDigest . structuralInfoSha1Digest . structuralInfo $ proxyA
 
--- | Data type structure, with nominal information.
-data NominalSop = NominalType String
-                | NominalNewtype String NominalSop
-                | NominalSop String [[NominalSop]]
+-- | Data type structure, with (some) nominal information.
+data StructuralInfo = NominalType String
+                | NominalNewtype String StructuralInfo
+                | StructuralInfo String [[StructuralInfo]]
   deriving (Eq, Ord, Show, GHC.Generic)
 
--- | Type class providing `NominalSop` for each data type.
+instance Binary StructuralInfo
+
+-- | Type class providing `StructuralInfo` for each data type.
 --
--- For regular non-recursive ADTs 'HasNominalSop' can be derived generically.
+-- For regular non-recursive ADTs 'HasStructuralInfo' can be derived generically.
 --
 -- > data Record = Record { a :: Int, b :: Bool, c :: [Char] } deriving (Generic)
--- > instance hasNominalSop Record
+-- > instance hasStructuralInfo Record
 --
 -- For stable types, you can provide only type name
 --
--- > instance HasNominalSop Int where nominalSop = ghcNominalType -- infer name from Generic information
--- > instance HasNominalSop Integer where nominalSop _ = NominalType "Integer"
+-- > instance HasStructuralInfo Int where structuralInfo = ghcNominalType -- infer name from Generic information
+-- > instance HasStructuralInfo Integer where structuralInfo _ = NominalType "Integer"
 --
 -- Recursive type story is a bit sad atm. If the type structure is stable, you can do:
 --
--- > instance HasNominalSop a => HasNominalSop [a] where nominalSop = ghcNominalSop1
-class HasNominalSop a where
-  nominalSop :: Proxy a -> NominalSop
+-- > instance HasStructuralInfo a => HasStructuralInfo [a] where structuralInfo = ghcStructuralInfo1
+class HasStructuralInfo a where
+  structuralInfo :: Proxy a -> StructuralInfo
 
-  default nominalSop :: (GHC.Generic a, All2 HasNominalSop (GCode a), GDatatypeInfo a, SingI (GCode a)) => Proxy a -> NominalSop
-  nominalSop = ghcNominalSop
+  default structuralInfo :: (GHC.Generic a, All2 HasStructuralInfo (GCode a), GDatatypeInfo a, SingI (GCode a)) => Proxy a -> StructuralInfo
+  structuralInfo = ghcStructuralInfo
 
-toUtf8ByteString :: String -> BS.ByteString
-toUtf8ByteString = toRep . fromString
+-- | A helper type family for 'encodeTaggedFile' and 'decodeTaggedFile'.
+--
+-- The default definition is @'SemanticVersion' a = 0@
+class KnownNat (SemanticVersion a) => HasSemanticVersion (a :: *) where
+  type SemanticVersion a :: Nat
+  type SemanticVersion a = 0
 
-nominalSopBuilder :: NominalSop -> Builder
-nominalSopBuilder (NominalType name) =
-  byteString "type" <> byteString (toUtf8ByteString name)
-nominalSopBuilder (NominalNewtype name nsop) =
-  byteString "newtype" <> byteString (toUtf8ByteString name) <> nominalSopBuilder nsop
-nominalSopBuilder (NominalSop name nsops) =
-  byteString "adt" <> byteString (toUtf8ByteString name) <> intDec (List.length nsops) <> foldMap nominalSopBuilder' nsops
+instance HasStructuralInfo StructuralInfo
+instance HasSemanticVersion StructuralInfo
 
-nominalSopBuilder' :: [NominalSop] -> Builder
-nominalSopBuilder' nsops = intDec (List.length nsops) <> foldMap nominalSopBuilder nsops
+structuralInfoSha1Digest :: StructuralInfo -> Digest SHA1State
+structuralInfoSha1Digest = sha1 . encode
 
-nominalSopByteString :: NominalSop -> LBS.ByteString
-nominalSopByteString = toLazyByteString . nominalSopBuilder
-
-nominalSopSha1Digest :: NominalSop -> Digest SHA1State
-nominalSopSha1Digest = sha1 . nominalSopByteString
+structuralInfoSha1ByteStringDigest :: StructuralInfo -> LBS.ByteString
+structuralInfoSha1ByteStringDigest = bytestringDigest . structuralInfoSha1Digest
 
 -- Generic derivation
 
-ghcNominalSop :: (GHC.Generic a, All2 HasNominalSop (GCode a), GDatatypeInfo a, SingI (GCode a)) => Proxy a -> NominalSop
-ghcNominalSop proxy = sopNominalSopS (gdatatypeInfo proxy)
+ghcStructuralInfo :: (GHC.Generic a, All2 HasStructuralInfo (GCode a), GDatatypeInfo a, SingI (GCode a)) => Proxy a -> StructuralInfo
+ghcStructuralInfo proxy = sopStructuralInfoS (gdatatypeInfo proxy)
 
-ghcNominalType ::  (GHC.Generic a,  GDatatypeInfo a) => Proxy a -> NominalSop
+ghcNominalType ::  (GHC.Generic a,  GDatatypeInfo a) => Proxy a -> StructuralInfo
 ghcNominalType proxy = sopNominalTypeS (gdatatypeInfo proxy)
 
-ghcNominalSop1 :: forall f a. (GHC.Generic1 f, GDatatypeInfo (f a), HasNominalSop a) => Proxy (f a) -> NominalSop
-ghcNominalSop1 proxy = sopNominalSop1S (nominalSop (Proxy :: Proxy a)) (gdatatypeInfo proxy)
+ghcStructuralInfo1 :: forall f a. (GHC.Generic1 f, GDatatypeInfo (f a), HasStructuralInfo a) => Proxy (f a) -> StructuralInfo
+ghcStructuralInfo1 proxy = sopStructuralInfo1S (structuralInfo (Proxy :: Proxy a)) (gdatatypeInfo proxy)
 
 -- SOP derivation
 
-sopNominalSop :: forall a. (Generic a, HasDatatypeInfo a, All2 HasNominalSop (Code a)) => Proxy a -> NominalSop
-sopNominalSop proxy = sopNominalSopS (datatypeInfo proxy)
+sopStructuralInfo :: forall a. (Generic a, HasDatatypeInfo a, All2 HasStructuralInfo (Code a)) => Proxy a -> StructuralInfo
+sopStructuralInfo proxy = sopStructuralInfoS (datatypeInfo proxy)
 
-sopNominalSopS :: forall xss. (All2 HasNominalSop xss, SingI xss) => DatatypeInfo xss -> NominalSop
-sopNominalSopS di@(Newtype _ _ ci)  = NominalNewtype (datatypeName di) (sopNominalNewtype ci)
-sopNominalSopS di@(ADT _ _ _)       = NominalSop (datatypeName di) (sopNominalAdt (toNP' (sing :: Sing xss)))
+sopStructuralInfoS :: forall xss. (All2 HasStructuralInfo xss, SingI xss) => DatatypeInfo xss -> StructuralInfo
+sopStructuralInfoS di@(Newtype _ _ ci)  = NominalNewtype (datatypeName di) (sopNominalNewtype ci)
+sopStructuralInfoS di@(ADT _ _ _)       = StructuralInfo (datatypeName di) (sopNominalAdt (toNP' (sing :: Sing xss)))
 
-sopNominalNewtype :: forall x. HasNominalSop x => ConstructorInfo '[x] -> NominalSop
-sopNominalNewtype _ = nominalSop (Proxy :: Proxy x)
+sopNominalNewtype :: forall x. HasStructuralInfo x => ConstructorInfo '[x] -> StructuralInfo
+sopNominalNewtype _ = structuralInfo (Proxy :: Proxy x)
 
-sopNominalAdt :: (All2 HasNominalSop xss) => NP (NP Proxy) xss -> [[NominalSop]]
+sopNominalAdt :: (All2 HasStructuralInfo xss) => NP (NP Proxy) xss -> [[StructuralInfo]]
 sopNominalAdt Nil          = []
-sopNominalAdt (p :* ps)  = sopNominalSopP p : sopNominalAdt ps
+sopNominalAdt (p :* ps)  = sopStructuralInfoP p : sopNominalAdt ps
 
-sopNominalSopP :: (All HasNominalSop xs) => NP Proxy xs -> [NominalSop]
-sopNominalSopP Nil = []
-sopNominalSopP (proxy :* rest) =  nominalSop proxy : sopNominalSopP rest
+sopStructuralInfoP :: (All HasStructuralInfo xs) => NP Proxy xs -> [StructuralInfo]
+sopStructuralInfoP Nil = []
+sopStructuralInfoP (proxy :* rest) =  structuralInfo proxy : sopStructuralInfoP rest
 
-sopNominalType :: forall a. (Generic a, HasDatatypeInfo a) => Proxy a -> NominalSop
+sopNominalType :: forall a. (Generic a, HasDatatypeInfo a) => Proxy a -> StructuralInfo
 sopNominalType proxy = sopNominalTypeS (datatypeInfo proxy)
 
-sopNominalTypeS :: DatatypeInfo xss -> NominalSop
+sopNominalTypeS :: DatatypeInfo xss -> StructuralInfo
 sopNominalTypeS di = NominalType (datatypeName di)
 
-sopNominalSop1 :: forall f a. (Generic (f a), HasDatatypeInfo (f a), HasNominalSop a) => Proxy (f a) -> NominalSop
-sopNominalSop1 proxy = sopNominalSop1S (nominalSop (Proxy :: Proxy a)) (datatypeInfo proxy)
+sopStructuralInfo1 :: forall f a. (Generic (f a), HasDatatypeInfo (f a), HasStructuralInfo a) => Proxy (f a) -> StructuralInfo
+sopStructuralInfo1 proxy = sopStructuralInfo1S (structuralInfo (Proxy :: Proxy a)) (datatypeInfo proxy)
 
-sopNominalSop1S :: NominalSop -> DatatypeInfo xss -> NominalSop
-sopNominalSop1S nsop di = NominalNewtype (datatypeName di) nsop
+sopStructuralInfo1S :: StructuralInfo -> DatatypeInfo xss -> StructuralInfo
+sopStructuralInfo1S nsop di = NominalNewtype (datatypeName di) nsop
 
 -- SOP helpers
 
@@ -212,48 +315,167 @@ toNP' :: Sing xss -> NP (NP Proxy) xss
 toNP' SNil = Nil
 toNP' SCons = toNP sing :* toNP' sing
 
+-- | Interleaving
+--
+-- > 3 | 9  .  .  .  .
+-- > 2 | 5  8  .  .  .
+-- > 1 | 2  4  7 11  .
+-- > 0 | 0  1  3  6 10
+-- > -----------------
+-- >     0  1  2  3  4
+--
+-- This can be calculated by @f x y = sum ([0..x+y]) + y@
+type Interleave (n :: Nat) (m :: Nat) = SumUpTo (n + m) + m
+type SumUpTo (n :: Nat) = n * (n - 1)
+
 -- Instances
 
-instance HasNominalSop Bool where nominalSop = ghcNominalType
-instance HasNominalSop Char where nominalSop = ghcNominalType
-instance HasNominalSop Int where nominalSop = ghcNominalType
-instance HasNominalSop Integer where nominalSop _ = NominalType "Integer"
+instance HasStructuralInfo Bool where structuralInfo = ghcNominalType
+instance HasStructuralInfo Char where structuralInfo = ghcNominalType
+instance HasStructuralInfo Int where structuralInfo = ghcNominalType
+instance HasStructuralInfo Integer where structuralInfo _ = NominalType "Integer"
 
-instance HasNominalSop Int8 where nominalSop _ = NominalType "Int8"
-instance HasNominalSop Int16 where nominalSop _ = NominalType "Int16"
-instance HasNominalSop Int32 where nominalSop _ = NominalType "Int32"
-instance HasNominalSop Int64 where nominalSop _ = NominalType "Int64"
+instance HasStructuralInfo Int8 where structuralInfo _ = NominalType "Int8"
+instance HasStructuralInfo Int16 where structuralInfo _ = NominalType "Int16"
+instance HasStructuralInfo Int32 where structuralInfo _ = NominalType "Int32"
+instance HasStructuralInfo Int64 where structuralInfo _ = NominalType "Int64"
 
-instance HasNominalSop Word8 where nominalSop _ = NominalType "Word8"
-instance HasNominalSop Word16 where nominalSop _ = NominalType "Word16"
-instance HasNominalSop Word32 where nominalSop _ = NominalType "Word32"
-instance HasNominalSop Word64 where nominalSop _ = NominalType "Word64"
+instance HasStructuralInfo Word8 where structuralInfo _ = NominalType "Word8"
+instance HasStructuralInfo Word16 where structuralInfo _ = NominalType "Word16"
+instance HasStructuralInfo Word32 where structuralInfo _ = NominalType "Word32"
+instance HasStructuralInfo Word64 where structuralInfo _ = NominalType "Word64"
 
 -- Recursive types
-instance HasNominalSop a => HasNominalSop [a] where nominalSop = ghcNominalSop1
+instance HasStructuralInfo a => HasStructuralInfo [a] where structuralInfo = ghcStructuralInfo1
+instance HasSemanticVersion a => HasSemanticVersion [a] where
+  type SemanticVersion [a] = SemanticVersion a
 
-instance HasNominalSop a => HasNominalSop (Maybe a)
-instance (HasNominalSop a, HasNominalSop b) => HasNominalSop (Either a b)
+-- Types from base
+instance HasStructuralInfo a => HasStructuralInfo (Maybe a)
+instance HasSemanticVersion a => HasSemanticVersion (Maybe a) where
+  type SemanticVersion (Maybe a) = SemanticVersion a
+
+instance (HasStructuralInfo a, HasStructuralInfo b) => HasStructuralInfo (Either a b)
+instance (HasSemanticVersion a, HasSemanticVersion b, KnownNat (SemanticVersion (Either a b))) => HasSemanticVersion (Either a b) where
+  type SemanticVersion (Either a b) = Interleave (SemanticVersion a) (SemanticVersion b)
+
+-- Tuples
+instance (HasStructuralInfo a, HasStructuralInfo b) => HasStructuralInfo (a, b)
+instance (HasStructuralInfo a, HasStructuralInfo b, HasStructuralInfo c) => HasStructuralInfo (a, b, c)
+instance (HasStructuralInfo a, HasStructuralInfo b, HasStructuralInfo c, HasStructuralInfo d) => HasStructuralInfo (a, b, c, d)
 
 -- Monoid
-instance HasNominalSop a => HasNominalSop (Monoid.Sum a)
-instance HasNominalSop a => HasNominalSop (Monoid.Product a)
+instance HasStructuralInfo a => HasStructuralInfo (Monoid.Sum a)
+instance HasSemanticVersion a => HasSemanticVersion (Monoid.Sum a) where
+  type SemanticVersion (Monoid.Sum a) = SemanticVersion a
+
+instance HasStructuralInfo a => HasStructuralInfo (Monoid.Product a)
+instance HasSemanticVersion a => HasSemanticVersion (Monoid.Product a) where
+  type SemanticVersion (Monoid.Product a) = SemanticVersion a
+
 -- TODO: add more
 
 -- ByteString
-instance HasNominalSop BS.ByteString where nominalSop _ = NominalType "ByteString.Strict"
-instance HasNominalSop LBS.ByteString where nominalSop _ = NominalType "ByteString.Lazy"
+instance HasStructuralInfo BS.ByteString where structuralInfo _ = NominalType "ByteString.Strict"
+instance HasStructuralInfo LBS.ByteString where structuralInfo _ = NominalType "ByteString.Lazy"
+
+instance HasSemanticVersion BS.ByteString
+instance HasSemanticVersion LBS.ByteString
 
 -- Text
-instance HasNominalSop S.Text where nominalSop _ = NominalType "Text.Strict"
-instance HasNominalSop L.Text where nominalSop _ = NominalType "Text.Lazy"
+instance HasStructuralInfo S.Text where structuralInfo _ = NominalType "Text.Strict"
+instance HasStructuralInfo L.Text where structuralInfo _ = NominalType "Text.Lazy"
+
+instance HasSemanticVersion S.Text
+instance HasSemanticVersion L.Text
 
 -- Containers
+instance HasStructuralInfo a => HasStructuralInfo (IntMap.IntMap a) where
+  structuralInfo _ = NominalNewtype "IntMap" $ structuralInfo (Proxy :: Proxy a)
+instance HasSemanticVersion a => HasSemanticVersion (IntMap.IntMap a) where
+  type SemanticVersion (IntMap.IntMap a) = SemanticVersion a
+
+instance HasStructuralInfo IntSet.IntSet where
+  structuralInfo _ = NominalType "IntSet"
+instance HasSemanticVersion IntSet.IntSet
+
+instance (HasStructuralInfo k, HasStructuralInfo v) => HasStructuralInfo (Map.Map k v) where
+  structuralInfo _ = StructuralInfo "Map" [[ structuralInfo (Proxy :: Proxy k), structuralInfo (Proxy :: Proxy v) ]]
+instance (HasSemanticVersion k, HasSemanticVersion v, KnownNat (SemanticVersion (Map.Map k v))) => HasSemanticVersion (Map.Map k v) where
+  type SemanticVersion (Map.Map k v) = Interleave (SemanticVersion k) (SemanticVersion v)
+
+instance HasStructuralInfo a => HasStructuralInfo (Seq.Seq a) where
+  structuralInfo _ = NominalNewtype "Seq" $ structuralInfo (Proxy :: Proxy a)
+instance HasSemanticVersion a => HasSemanticVersion (Seq.Seq a) where
+  type SemanticVersion (Seq.Seq a) = SemanticVersion a
+
+instance HasStructuralInfo a => HasStructuralInfo (Set.Set a) where
+  structuralInfo _ = NominalNewtype "Set" $ structuralInfo (Proxy :: Proxy a)
+instance HasSemanticVersion a => HasSemanticVersion (Set.Set a) where
+  type SemanticVersion (Set.Set a) = SemanticVersion a
 
 -- Unordered containers
 
+instance (HasStructuralInfo k, HasStructuralInfo v) => HasStructuralInfo (HML.HashMap k v) where
+  structuralInfo _ = StructuralInfo "HashMap" [[ structuralInfo (Proxy :: Proxy k), structuralInfo (Proxy :: Proxy v) ]]
+instance (HasSemanticVersion k, HasSemanticVersion v, KnownNat (SemanticVersion (HML.HashMap k v))) => HasSemanticVersion (HML.HashMap k v) where
+  type SemanticVersion (HML.HashMap k v) = Interleave (SemanticVersion k) (SemanticVersion v)
+
+instance HasStructuralInfo a => HasStructuralInfo (HS.HashSet a) where
+  structuralInfo _ = NominalNewtype "HashSet" $ structuralInfo (Proxy :: Proxy a)
+instance HasSemanticVersion a => HasSemanticVersion (HS.HashSet a) where
+  type SemanticVersion (HS.HashSet a) = SemanticVersion a
+
 -- Array
+instance (HasStructuralInfo i, HasStructuralInfo e) => HasStructuralInfo (Array.Array i e) where
+  structuralInfo _ = StructuralInfo "Array" [[ structuralInfo (Proxy :: Proxy i), structuralInfo (Proxy :: Proxy e) ]]
+instance (HasSemanticVersion i, HasSemanticVersion e, KnownNat (SemanticVersion (Array.Array i e))) => HasSemanticVersion (Array.Array i e) where
+  type SemanticVersion (Array.Array i e) = Interleave (SemanticVersion i) (SemanticVersion e)
+
+instance (HasStructuralInfo i, HasStructuralInfo e) => HasStructuralInfo (Array.UArray i e) where
+  structuralInfo _ = StructuralInfo "UArray" [[ structuralInfo (Proxy :: Proxy i), structuralInfo (Proxy :: Proxy e) ]]
+instance (HasSemanticVersion i, HasSemanticVersion e, KnownNat (SemanticVersion (Array.UArray i e))) => HasSemanticVersion (Array.UArray i e) where
+  type SemanticVersion (Array.UArray i e) = Interleave (SemanticVersion i) (SemanticVersion e)
 
 -- Vector
 
+instance HasStructuralInfo a => HasStructuralInfo (V.Vector a) where
+  structuralInfo _ = NominalNewtype "Vector" $ structuralInfo (Proxy :: Proxy a)
+instance HasSemanticVersion a => HasSemanticVersion (V.Vector a) where
+  type SemanticVersion (V.Vector a) = SemanticVersion a
+
+instance HasStructuralInfo a => HasStructuralInfo (U.Vector a) where
+  structuralInfo _ = NominalNewtype "Vector.Unboxed" $ structuralInfo (Proxy :: Proxy a)
+instance HasSemanticVersion a => HasSemanticVersion (U.Vector a) where
+  type SemanticVersion (U.Vector a) = SemanticVersion a
+
+instance HasStructuralInfo a => HasStructuralInfo (S.Vector a) where
+  structuralInfo _ = NominalNewtype "Vector.Storable" $ structuralInfo (Proxy :: Proxy a)
+instance HasSemanticVersion a => HasSemanticVersion (S.Vector a) where
+  type SemanticVersion (S.Vector a) = SemanticVersion a
+
+-- Time
+
+instance HasStructuralInfo Time.UTCTime where structuralInfo _ = NominalType "UTCTime"
+instance HasStructuralInfo Time.DiffTime where structuralInfo _ = NominalType "DiffTime"
+instance HasStructuralInfo Time.UniversalTime where structuralInfo _ = NominalType "UniversalTime"
+instance HasStructuralInfo Time.NominalDiffTime where structuralInfo _ = NominalType "NominalDiffTime"
+instance HasStructuralInfo Time.Day where structuralInfo _ = NominalType "Day"
+instance HasStructuralInfo Time.TimeZone where structuralInfo _ = NominalType "TimeZone"
+instance HasStructuralInfo Time.TimeOfDay where structuralInfo _ = NominalType "TimeOfDay"
+instance HasStructuralInfo Time.LocalTime where structuralInfo _ = NominalType "LocalTime"
+
+instance HasSemanticVersion Time.UTCTime
+instance HasSemanticVersion Time.DiffTime
+instance HasSemanticVersion Time.UniversalTime
+instance HasSemanticVersion Time.NominalDiffTime
+instance HasSemanticVersion Time.Day
+instance HasSemanticVersion Time.TimeZone
+instance HasSemanticVersion Time.TimeOfDay
+instance HasSemanticVersion Time.LocalTime
+
 -- Value
+
+-- TODO: derive sop
+instance HasStructuralInfo Aeson.Value where structuralInfo _ = NominalType "Aeson.Value"
+instance HasSemanticVersion Aeson.Value
