@@ -72,6 +72,7 @@ module Data.Binary.Tagged
   -- ** Type level calculations
   Interleave,
   SumUpTo,
+  Div2,
   -- * Generic derivation
   -- ** GHC
   ghcStructuralInfo,
@@ -331,7 +332,11 @@ toNP' SCons = toNP sing :* toNP' sing
 --
 -- This can be calculated by @f x y = sum ([0..x+y]) + y@
 type Interleave (n :: Nat) (m :: Nat) = SumUpTo (n + m) + m
-type SumUpTo (n :: Nat) = n * (n - 1)
+type SumUpTo (n :: Nat) = Div2 (n * (n + 1))
+type family Div2 (n :: Nat) :: Nat where
+  Div2 0 = 0
+  Div2 1 = 0
+  Div2 n = 1 + Div2 (n - 2)
 
 -- Instances
 

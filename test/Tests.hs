@@ -21,7 +21,16 @@ main = defaultMain $ testGroup "Tests"
   [ roundtrips
   , wrongRoundtrips
   , failedRoundtrips
+  , testProperty "Interleave" interleaveProp
   ]
+
+-- | We actually check that this compiles.
+interleaveProp :: Property
+interleaveProp = property $ once $ lhs === rhs
+  where lhs :: Proxy 7
+        lhs = Proxy
+        rhs :: Proxy (Interleave 2 1)
+        rhs = Proxy
 
 instance Arbitrary a => Arbitrary (BinaryTagged v a) where
   arbitrary = fmap BinaryTagged arbitrary
