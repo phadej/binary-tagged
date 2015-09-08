@@ -3,9 +3,9 @@
 -- see: https://github.com/sol/hpack
 
 name:           binary-tagged
-version:        0.1.0.0
+version:        0.1.1.0
 synopsis:       Tagged binary serialisation.
-description:    Write me.
+description:    Check <https://github.com/phadej/binary-tagged#readme README on Github>
 category:       Web
 homepage:       https://github.com/phadej/binary-tagged#readme
 bug-reports:    https://github.com/phadej/binary-tagged/issues
