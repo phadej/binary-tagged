@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
@@ -96,12 +97,15 @@ import           Data.Binary.Get (ByteOffset)
 import           Data.ByteString as BS
 import           Data.ByteString.Lazy as LBS
 import           Data.Digest.Pure.SHA
-import           Data.Foldable (Foldable)
 import           Data.Monoid ((<>))
 import           Data.Proxy
-import           Data.Traversable (Traversable)
 import           Generics.SOP as SOP
 import           Generics.SOP.GGP as SOP
+
+#if !MIN_VERSION_base(4,8,0)
+import           Data.Foldable (Foldable)
+import           Data.Traversable (Traversable)
+#endif
 
 import qualified GHC.Generics as GHC
 import           GHC.TypeLits
