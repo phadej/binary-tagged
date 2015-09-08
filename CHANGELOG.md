@@ -1,0 +1,7 @@
+- 0.1.2.0
+    - Fix `Interleave` &amp; `SumUpTo`, introduce `Div2`
+- 0.1.1.0
+    - Add instances
+        - `Ratio`
+        - `Word`
+        - `HasSemanticVersion` for primitive types
