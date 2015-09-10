@@ -1,7 +1,7 @@
 name: binary-tagged
-version: 0.1.0.0
+version: 0.1.2.0
 synopsis: Tagged binary serialisation.
-description: Write me.
+description: Check <https://github.com/phadej/binary-tagged#readme README on Github>
 author: Oleg Grenrus <oleg.grenrus@iki.fi>
 maintainer: Oleg Grenrus <oleg.grenrus@iki.fi>
 license: BSD3
@@ -10,6 +10,7 @@ category: Web
 tested-with: GHC==7.8.4, GHC==7.10.2
 extra-source-files:
 - README.md
+- CHANGELOG.md
 
 ghc-options: -Wall
 
@@ -47,10 +48,11 @@ tests:
       - tasty-quickcheck
 
 benchmarks:
-  binary-tagged-benchmark:
+  binary-tagged-bench:
     main: Bench.hs
     source-dirs: bench
     dependencies:
       - binary-tagged
       - binary-orphans >=0.1.1
+      - deepseq
       - criterion
