@@ -375,6 +375,12 @@ instance HasSemanticVersion Word32
 instance HasSemanticVersion Word64
 
 -- | /Since binary-tagged-0.1.3.0/
+instance HasStructuralInfo Ordering where structuralInfo = ghcNominalType
+
+-- | /Since binary-tagged-0.1.3.0/
+instance HasSemanticVersion Ordering
+
+-- | /Since binary-tagged-0.1.3.0/
 instance HasStructuralInfo Float where structuralInfo _ = NominalType "Float"
 
 -- | /Since binary-tagged-0.1.3.0/
