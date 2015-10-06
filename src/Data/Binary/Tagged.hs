@@ -430,6 +430,14 @@ instance (HasSemanticVersion a
          ,KnownNat (SemanticVersion (a, b, c, d))) => HasSemanticVersion (a, b, c, d) where
   type SemanticVersion (a, b, c, d) = Interleave (SemanticVersion a) (SemanticVersion (b, c, d))
 
+-- Unit
+
+-- | /Since binary-tagged-0.1.3.0/
+instance HasStructuralInfo () where structuralInfo _ = NominalType "()"
+
+-- | /Since binary-tagged-0.1.3.0/
+instance HasSemanticVersion ()
+
 -- Fixed
 
 -- | /Since binary-tagged-0.1.3.0/
