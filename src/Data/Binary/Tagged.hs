@@ -396,6 +396,26 @@ instance (HasStructuralInfo a, HasStructuralInfo b) => HasStructuralInfo (a, b)
 instance (HasStructuralInfo a, HasStructuralInfo b, HasStructuralInfo c) => HasStructuralInfo (a, b, c)
 instance (HasStructuralInfo a, HasStructuralInfo b, HasStructuralInfo c, HasStructuralInfo d) => HasStructuralInfo (a, b, c, d)
 
+instance (HasSemanticVersion a
+         ,HasSemanticVersion b
+         ,KnownNat (SemanticVersion (a, b))) => HasSemanticVersion (a, b) where
+  type SemanticVersion (a, b) = Interleave (SemanticVersion a) (SemanticVersion b)
+
+-- | /Since binary-tagged-0.1.3.0/
+instance (HasSemanticVersion a
+         ,HasSemanticVersion b
+         ,HasSemanticVersion c
+         ,KnownNat (SemanticVersion (a, b, c))) => HasSemanticVersion (a, b, c) where
+  type SemanticVersion (a, b, c) = Interleave (SemanticVersion a) (SemanticVersion (b, c))
+
+-- | /Since binary-tagged-0.1.3.0/
+instance (HasSemanticVersion a
+         ,HasSemanticVersion b
+         ,HasSemanticVersion c
+         ,HasSemanticVersion d
+         ,KnownNat (SemanticVersion (a, b, c, d))) => HasSemanticVersion (a, b, c, d) where
+  type SemanticVersion (a, b, c, d) = Interleave (SemanticVersion a) (SemanticVersion (b, c, d))
+
 -- Monoid
 instance HasStructuralInfo a => HasStructuralInfo (Monoid.Sum a)
 instance HasSemanticVersion a => HasSemanticVersion (Monoid.Sum a) where
