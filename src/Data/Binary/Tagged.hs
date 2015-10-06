@@ -112,25 +112,26 @@ import qualified GHC.Generics as GHC
 import           GHC.TypeLits
 
 -- Instances
-import qualified Data.Vector as V
-import qualified Data.Aeson as Aeson
-import qualified Data.Monoid as Monoid
 import           Data.Int
-import qualified Data.Text as S
-import qualified Data.Text.Lazy as L
+import qualified Data.Aeson as Aeson
 import qualified Data.Array.IArray as Array
 import qualified Data.Array.Unboxed as Array
+import qualified Data.Fixed as Fixed
+import qualified Data.HashMap.Lazy as HML
+import qualified Data.HashSet as HS
 import qualified Data.IntMap as IntMap
 import qualified Data.IntSet as IntSet
 import qualified Data.Map as Map
+import qualified Data.Monoid as Monoid
 import qualified Data.Ratio as Ratio
 import qualified Data.Sequence as Seq
 import qualified Data.Set as Set
-import qualified Data.HashSet as HS
-import qualified Data.HashMap.Lazy as HML
+import qualified Data.Text as S
+import qualified Data.Text.Lazy as L
 import qualified Data.Time as Time
-import qualified Data.Vector.Unboxed as U
+import qualified Data.Vector as V
 import qualified Data.Vector.Storable as S
+import qualified Data.Vector.Unboxed as U
 
 
 -- | 'Binary' serialisable class, which tries to be less error-prone to data structure changes.
@@ -415,6 +416,23 @@ instance (HasSemanticVersion a
          ,HasSemanticVersion d
          ,KnownNat (SemanticVersion (a, b, c, d))) => HasSemanticVersion (a, b, c, d) where
   type SemanticVersion (a, b, c, d) = Interleave (SemanticVersion a) (SemanticVersion (b, c, d))
+
+-- Fixed
+
+-- | /Since binary-tagged-0.1.3.0/
+instance HasStructuralInfo a => HasStructuralInfo (Fixed.Fixed a) where
+  structuralInfo _ = StructuralInfo "Fixed" [[ structuralInfo (Proxy :: Proxy a) ]]
+
+instance HasStructuralInfo Fixed.E0 where structuralInfo _ = NominalType "E0"
+instance HasStructuralInfo Fixed.E1 where structuralInfo _ = NominalType "E1"
+instance HasStructuralInfo Fixed.E2 where structuralInfo _ = NominalType "E2"
+instance HasStructuralInfo Fixed.E3 where structuralInfo _ = NominalType "E3"
+instance HasStructuralInfo Fixed.E6 where structuralInfo _ = NominalType "E6"
+instance HasStructuralInfo Fixed.E9 where structuralInfo _ = NominalType "E9"
+instance HasStructuralInfo Fixed.E12 where structuralInfo _ = NominalType "E12"
+
+-- | /Since binary-tagged-0.1.3.0/
+instance HasSemanticVersion (Fixed.Fixed a)
 
 -- Monoid
 instance HasStructuralInfo a => HasStructuralInfo (Monoid.Sum a)
