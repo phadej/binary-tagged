@@ -1,3 +1,12 @@
+- 0.1.3.0 (2015-10-06)
+    - Add tuple `HasSemanticVersion` instances
+    - Add instances for
+        - `()`
+        - `Float`
+        - `Double`
+        - Version`
+        - `Fixed`
+        - `Ordering`
 - 0.1.2.0
     - Fix `Interleave` &amp; `SumUpTo`, introduce `Div2`
 - 0.1.1.0
