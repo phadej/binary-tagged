@@ -374,6 +374,18 @@ instance HasSemanticVersion Word16
 instance HasSemanticVersion Word32
 instance HasSemanticVersion Word64
 
+-- | /Since binary-tagged-0.1.3.0/
+instance HasStructuralInfo Float where structuralInfo _ = NominalType "Float"
+
+-- | /Since binary-tagged-0.1.3.0/
+instance HasStructuralInfo Double where structuralInfo _ = NominalType "Double"
+
+-- | /Since binary-tagged-0.1.3.0/
+instance HasSemanticVersion Float
+
+-- | /Since binary-tagged-0.1.3.0/
+instance HasSemanticVersion Double
+
 -- Recursive types
 instance HasStructuralInfo a => HasStructuralInfo [a] where structuralInfo = ghcStructuralInfo1
 instance HasSemanticVersion a => HasSemanticVersion [a] where
