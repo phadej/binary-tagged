@@ -132,6 +132,7 @@ import qualified Data.Time as Time
 import qualified Data.Vector as V
 import qualified Data.Vector.Storable as S
 import qualified Data.Vector.Unboxed as U
+import qualified Data.Version as Version
 
 
 -- | 'Binary' serialisable class, which tries to be less error-prone to data structure changes.
@@ -433,6 +434,18 @@ instance HasStructuralInfo Fixed.E12 where structuralInfo _ = NominalType "E12"
 
 -- | /Since binary-tagged-0.1.3.0/
 instance HasSemanticVersion (Fixed.Fixed a)
+
+-- Version
+
+-- | /Since binary-tagged-0.1.3.0/
+instance HasStructuralInfo Version.Version where
+  structuralInfo _ = StructuralInfo "Version" [[ structuralInfo (Proxy :: Proxy [Int])
+                                               , structuralInfo (Proxy :: Proxy [String])
+                                              ]]
+-- Version has no Generic instance :(
+
+-- | /Since binary-tagged-0.1.3.0/
+instance HasSemanticVersion Version.Version
 
 -- Monoid
 instance HasStructuralInfo a => HasStructuralInfo (Monoid.Sum a)
