@@ -1,3 +1,5 @@
+- 0.1.3.0 (2015-10-24)
+    - Support `generics-sop-0.2`
 - 0.1.2.0 (2015-10-06)
     - Add tuple `HasSemanticVersion` instances
     - Add instances for
