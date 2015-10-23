@@ -103,6 +103,10 @@ import           Data.Proxy
 import           Generics.SOP as SOP
 import           Generics.SOP.GGP as SOP
 
+#if MIN_VERSION_generics_sop(0,2,0)
+import           Generics.SOP.Constraint as SOP
+#endif
+
 #if !MIN_VERSION_base(4,8,0)
 import           Data.Foldable (Foldable)
 import           Data.Traversable (Traversable)
@@ -247,7 +251,15 @@ instance Binary StructuralInfo
 class HasStructuralInfo a where
   structuralInfo :: Proxy a -> StructuralInfo
 
-  default structuralInfo :: (GHC.Generic a, All2 HasStructuralInfo (GCode a), GDatatypeInfo a, SingI (GCode a)) => Proxy a -> StructuralInfo
+  default structuralInfo :: ( GHC.Generic a
+                            , All2 HasStructuralInfo (GCode a)
+                            , GDatatypeInfo a
+#if MIN_VERSION_generics_sop(0,2,0)
+                            , SListI2 (GCode a)
+#else
+                            , SingI (GCode a)
+#endif
+                            ) => Proxy a -> StructuralInfo
   structuralInfo = ghcStructuralInfo
 
 -- | A helper type family for 'encodeTaggedFile' and 'decodeTaggedFile'.
@@ -268,7 +280,17 @@ structuralInfoSha1ByteStringDigest = bytestringDigest . structuralInfoSha1Digest
 
 -- Generic derivation
 
-ghcStructuralInfo :: (GHC.Generic a, All2 HasStructuralInfo (GCode a), GDatatypeInfo a, SingI (GCode a)) => Proxy a -> StructuralInfo
+ghcStructuralInfo :: ( GHC.Generic a
+                     , All2 HasStructuralInfo (GCode a)
+                     , GDatatypeInfo a
+#if MIN_VERSION_generics_sop(0,2,0)
+                     , SListI2 (GCode a)
+#else
+                     , SingI (GCode a)
+#endif
+                     )
+                  => Proxy a
+                  -> StructuralInfo
 ghcStructuralInfo proxy = sopStructuralInfoS (gdatatypeInfo proxy)
 
 ghcNominalType ::  (GHC.Generic a,  GDatatypeInfo a) => Proxy a -> StructuralInfo
@@ -282,12 +304,23 @@ ghcStructuralInfo1 proxy = sopStructuralInfo1S (structuralInfo (Proxy :: Proxy a
 sopStructuralInfo :: forall a. (Generic a, HasDatatypeInfo a, All2 HasStructuralInfo (Code a)) => Proxy a -> StructuralInfo
 sopStructuralInfo proxy = sopStructuralInfoS (datatypeInfo proxy)
 
-sopStructuralInfoS :: forall xss. (All2 HasStructuralInfo xss, SingI xss) => DatatypeInfo xss -> StructuralInfo
+sopStructuralInfoS :: forall xss. ( All2 HasStructuralInfo xss
+#if MIN_VERSION_generics_sop(0,2,0)
+                                  , SListI2 xss
+#else
+                                  , SingI xss
+#endif
+                                  )
+                   => DatatypeInfo xss
+                   -> StructuralInfo
 sopStructuralInfoS di@(Newtype _ _ ci)  = NominalNewtype (datatypeName di) (sopNominalNewtype ci)
-sopStructuralInfoS di@(ADT _ _ _)       = StructuralInfo (datatypeName di) (sopNominalAdt (toNP' (sing :: Sing xss)))
+sopStructuralInfoS di@(ADT _ _ _)       = StructuralInfo (datatypeName di) (sopNominalAdtPOP (hpure Proxy :: POP Proxy xss))
 
 sopNominalNewtype :: forall x. HasStructuralInfo x => ConstructorInfo '[x] -> StructuralInfo
 sopNominalNewtype _ = structuralInfo (Proxy :: Proxy x)
+
+sopNominalAdtPOP :: (All2 HasStructuralInfo xss) => POP Proxy xss -> [[StructuralInfo]]
+sopNominalAdtPOP (POP np2) = sopNominalAdt np2
 
 sopNominalAdt :: (All2 HasStructuralInfo xss) => NP (NP Proxy) xss -> [[StructuralInfo]]
 sopNominalAdt Nil          = []
@@ -314,14 +347,6 @@ sopStructuralInfo1S nsop di = NominalNewtype (datatypeName di) nsop
 datatypeName :: DatatypeInfo xss -> DatatypeName
 datatypeName (Newtype _ d _)  = d
 datatypeName (ADT _ d _)      = d
-
-toNP :: Sing xs -> NP Proxy xs
-toNP SNil = Nil
-toNP SCons = Proxy :* toNP sing
-
-toNP' :: Sing xss -> NP (NP Proxy) xss
-toNP' SNil = Nil
-toNP' SCons = toNP sing :* toNP' sing
 
 -- | Interleaving
 --

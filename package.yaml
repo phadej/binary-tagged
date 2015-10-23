@@ -16,7 +16,7 @@ ghc-options: -Wall
 
 dependencies:
   - base                     >=4.7  && <4.9
-  - generics-sop             >=0.1  && <0.2
+  - generics-sop             >=0.1  && <0.3
   - SHA                      >=1.6  && <1.7
 
   - array                    >=0.5  && <0.6
