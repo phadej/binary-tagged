@@ -35,14 +35,14 @@ library
     , SHA                      >=1.6  && <1.7
     , array                    >=0.5  && <0.6
     , aeson                    >=0.8  && <0.11
-    , binary                   >=0.7  && <0.8
+    , binary                   >=0.7  && <0.9
     , bytestring               >=0.10 && <0.11
     , containers               >=0.5  && <0.6
     , hashable                 >=1.2  && <1.3
     , scientific               >=0.3  && <0.4
     , tagged                   >=0.7  && <0.9
     , text                     >=1.2  && <1.3
-    , time                     >=1.4  && <1.6
+    , time                     >=1.4  && <1.7
     , unordered-containers     >=0.2  && <0.3
     , vector                   >=0.10 && <0.12
   exposed-modules:
@@ -61,14 +61,14 @@ test-suite binary-tagged-test
     , SHA                      >=1.6  && <1.7
     , array                    >=0.5  && <0.6
     , aeson                    >=0.8  && <0.11
-    , binary                   >=0.7  && <0.8
+    , binary                   >=0.7  && <0.9
     , bytestring               >=0.10 && <0.11
     , containers               >=0.5  && <0.6
     , hashable                 >=1.2  && <1.3
     , scientific               >=0.3  && <0.4
     , tagged                   >=0.7  && <0.9
     , text                     >=1.2  && <1.3
-    , time                     >=1.4  && <1.6
+    , time                     >=1.4  && <1.7
     , unordered-containers     >=0.2  && <0.3
     , vector                   >=0.10 && <0.12
     , binary-tagged
@@ -95,14 +95,14 @@ benchmark binary-tagged-bench
     , SHA                      >=1.6  && <1.7
     , array                    >=0.5  && <0.6
     , aeson                    >=0.8  && <0.11
-    , binary                   >=0.7  && <0.8
+    , binary                   >=0.7  && <0.9
     , bytestring               >=0.10 && <0.11
     , containers               >=0.5  && <0.6
     , hashable                 >=1.2  && <1.3
     , scientific               >=0.3  && <0.4
     , tagged                   >=0.7  && <0.9
     , text                     >=1.2  && <1.3
-    , time                     >=1.4  && <1.6
+    , time                     >=1.4  && <1.7
     , unordered-containers     >=0.2  && <0.3
     , vector                   >=0.10 && <0.12
     , binary-tagged
