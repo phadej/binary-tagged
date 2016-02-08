@@ -13,7 +13,7 @@ author:         Oleg Grenrus <oleg.grenrus@iki.fi>
 maintainer:     Oleg Grenrus <oleg.grenrus@iki.fi>
 license:        BSD3
 license-file:   LICENSE
-tested-with:    GHC==7.8.4, GHC==7.10.2
+tested-with:    GHC==7.8.4, GHC==7.10.2, GHC==7.10.3
 build-type:     Simple
 cabal-version:  >= 1.10
 
@@ -30,7 +30,7 @@ library
       src
   ghc-options: -Wall
   build-depends:
-      base                     >=4.7  && <4.9
+      base                     >=4.7  && <5
     , generics-sop             >=0.1  && <0.3
     , SHA                      >=1.6  && <1.7
     , array                    >=0.5  && <0.6
@@ -56,7 +56,7 @@ test-suite binary-tagged-test
       test
   ghc-options: -Wall
   build-depends:
-      base                     >=4.7  && <4.9
+      base                     >=4.7  && <5
     , generics-sop             >=0.1  && <0.3
     , SHA                      >=1.6  && <1.7
     , array                    >=0.5  && <0.6
@@ -90,7 +90,7 @@ benchmark binary-tagged-bench
       bench
   ghc-options: -Wall
   build-depends:
-      base                     >=4.7  && <4.9
+      base                     >=4.7  && <5
     , generics-sop             >=0.1  && <0.3
     , SHA                      >=1.6  && <1.7
     , array                    >=0.5  && <0.6
