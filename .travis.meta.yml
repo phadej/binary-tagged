@@ -6,12 +6,23 @@ env:
   - GHCVER=7.10.2 CABALVER=1.22
   - GHCVER=7.10.2 CABALVER=1.22 STACKAGESNAPSHOT=lts-3.10
   - GHCVER=7.10.3 CABALVER=1.22
-  - GHCVER=head CABALVER=1.22
+  - GHCVER=8.0.1 CABALVER=1.24 NOTESTS=YES CABALFLAGS=-f-aeson
+  - GHCVER=head CABALVER=1.24 NOTESTS=YES
 
 matrix:
   fast_finish: true
   allow_failures:
-    - env: GHCVER=head CABALVER=1.22
+    - env: GHCVER=head CABALVER=1.24 NOTESTS=YES
+
+meta:
+  pre:
+    install:
+      - if [ $CABALVER = "1.24" ]; then
+          git clone https://github.com/well-typed/generics-sop.git;
+          pushd generics-sop;
+          cabal install;
+          popd;
+        fi
 
 branches:
   only:
