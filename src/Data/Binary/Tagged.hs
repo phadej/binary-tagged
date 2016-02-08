@@ -117,7 +117,6 @@ import           GHC.TypeLits
 
 -- Instances
 import           Data.Int
-import qualified Data.Aeson as Aeson
 import qualified Data.Array.IArray as Array
 import qualified Data.Array.Unboxed as Array
 import qualified Data.Fixed as Fixed
@@ -138,6 +137,9 @@ import qualified Data.Vector.Storable as S
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Version as Version
 
+#ifdef MIN_VERSION_aeson
+import qualified Data.Aeson as Aeson
+#endif
 
 -- | 'Binary' serialisable class, which tries to be less error-prone to data structure changes.
 --
@@ -368,8 +370,8 @@ type family Div2 (n :: Nat) :: Nat where
 -- Instances
 
 instance HasStructuralInfo Bool where structuralInfo = ghcNominalType
-instance HasStructuralInfo Char where structuralInfo = ghcNominalType
-instance HasStructuralInfo Int where structuralInfo = ghcNominalType
+instance HasStructuralInfo Char where structuralInfo _ = NominalType "Char"
+instance HasStructuralInfo Int where structuralInfo _ = NominalType "Int"
 instance HasStructuralInfo Word where structuralInfo _ = NominalType "Word"
 instance HasStructuralInfo Integer where structuralInfo _ = NominalType "Integer"
 
@@ -608,8 +610,10 @@ instance HasSemanticVersion Time.TimeZone
 instance HasSemanticVersion Time.TimeOfDay
 instance HasSemanticVersion Time.LocalTime
 
+#ifdef MIN_VERSION_aeson
 -- Value
 
 -- TODO: derive sop
 instance HasStructuralInfo Aeson.Value where structuralInfo _ = NominalType "Aeson.Value"
 instance HasSemanticVersion Aeson.Value
+#endif

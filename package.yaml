@@ -7,30 +7,39 @@ maintainer: Oleg Grenrus <oleg.grenrus@iki.fi>
 license: BSD3
 github: phadej/binary-tagged
 category: Web
-tested-with: GHC==7.8.4, GHC==7.10.2
+tested-with: GHC==7.8.4, GHC==7.10.3, GHC==8.0.1
 extra-source-files:
 - README.md
 - CHANGELOG.md
 
 ghc-options: -Wall
 
+flags:
+  aeson:
+    manual: true
+    default: true
+    description: "You can disable the use of the `aeson` package using `-f-aeson`."
+
 dependencies:
-  - base                     >=4.7  && <4.9
+  - base                     >=4.7  && <4.10
   - generics-sop             >=0.1  && <0.3
   - SHA                      >=1.6  && <1.7
-
   - array                    >=0.5  && <0.6
-  - aeson                    >=0.8  && <0.11
-  - binary                   >=0.7  && <0.8
+  - binary                   >=0.7  && <0.9
   - bytestring               >=0.10 && <0.11
   - containers               >=0.5  && <0.6
   - hashable                 >=1.2  && <1.3
   - scientific               >=0.3  && <0.4
   - tagged                   >=0.7  && <0.9
   - text                     >=1.2  && <1.3
-  - time                     >=1.4  && <1.6
+  - time                     >=1.4  && <1.7
   - unordered-containers     >=0.2  && <0.3
   - vector                   >=0.10 && <0.12
+
+when:
+  - condition: flag(aeson)
+    dependencies:
+      - aeson                    >=0.8  && <0.11
 
 library:
   source-dirs: src
