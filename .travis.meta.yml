@@ -14,16 +14,6 @@ matrix:
   allow_failures:
     - env: GHCVER=head CABALVER=1.24 NOTESTS=YES
 
-meta:
-  pre:
-    install:
-      - if [ $CABALVER = "1.24" ]; then
-          git clone https://github.com/well-typed/generics-sop.git;
-          pushd generics-sop;
-          cabal install;
-          popd;
-        fi
-
 branches:
   only:
     - master
