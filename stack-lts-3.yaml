@@ -1,6 +1,5 @@
 flags: {}
 packages:
 - '.'
-extra-deps:
-- binary-orphans-0.1.2.0
-resolver: lts-3.6
+extra-deps: []
+resolver: lts-3.22
