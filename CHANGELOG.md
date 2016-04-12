@@ -1,3 +1,6 @@
+- 0.1.4.0 (2016-04-12)
+    - Add semigroups types
+    - Add Natural
 - 0.1.3.1 (2016-02-10)
     - Support GHC 8.0
 - 0.1.3.0 (2015-10-24)

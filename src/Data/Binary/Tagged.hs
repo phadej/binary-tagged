@@ -124,9 +124,11 @@ import qualified Data.HashMap.Lazy as HML
 import qualified Data.HashSet as HS
 import qualified Data.IntMap as IntMap
 import qualified Data.IntSet as IntSet
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as Map
 import qualified Data.Monoid as Monoid
 import qualified Data.Ratio as Ratio
+import qualified Data.Semigroup as Semigroup
 import qualified Data.Sequence as Seq
 import qualified Data.Set as Set
 import qualified Data.Text as S
@@ -136,6 +138,7 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Storable as S
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Version as Version
+import qualified Numeric.Natural as Natural
 
 #ifdef MIN_VERSION_aeson
 import qualified Data.Aeson as Aeson
@@ -280,7 +283,9 @@ structuralInfoSha1Digest = sha1 . encode
 structuralInfoSha1ByteStringDigest :: StructuralInfo -> LBS.ByteString
 structuralInfoSha1ByteStringDigest = bytestringDigest . structuralInfoSha1Digest
 
--- Generic derivation
+-------------------------------------------------------------------------------
+-- Generics
+-------------------------------------------------------------------------------
 
 ghcStructuralInfo :: ( GHC.Generic a
                      , All2 HasStructuralInfo (GCode a)
@@ -344,7 +349,9 @@ sopStructuralInfo1 proxy = sopStructuralInfo1S (structuralInfo (Proxy :: Proxy a
 sopStructuralInfo1S :: StructuralInfo -> DatatypeInfo xss -> StructuralInfo
 sopStructuralInfo1S nsop di = NominalNewtype (datatypeName di) nsop
 
+-------------------------------------------------------------------------------
 -- SOP helpers
+-------------------------------------------------------------------------------
 
 datatypeName :: DatatypeInfo xss -> DatatypeName
 datatypeName (Newtype _ d _)  = d
@@ -367,7 +374,9 @@ type family Div2 (n :: Nat) :: Nat where
   Div2 1 = 0
   Div2 n = 1 + Div2 (n - 2)
 
+-------------------------------------------------------------------------------
 -- Instances
+-------------------------------------------------------------------------------
 
 instance HasStructuralInfo Bool where structuralInfo = ghcNominalType
 instance HasStructuralInfo Char where structuralInfo _ = NominalType "Char"
@@ -419,12 +428,22 @@ instance HasSemanticVersion Float
 -- | /Since binary-tagged-0.1.3.0/
 instance HasSemanticVersion Double
 
--- Recursive types
+-------------------------------------------------------------------------------
+-- Recursive types: List, NonEmpty
+-------------------------------------------------------------------------------
+
 instance HasStructuralInfo a => HasStructuralInfo [a] where structuralInfo = ghcStructuralInfo1
 instance HasSemanticVersion a => HasSemanticVersion [a] where
   type SemanticVersion [a] = SemanticVersion a
 
--- Types from base
+instance HasStructuralInfo a => HasStructuralInfo (NE.NonEmpty a) where structuralInfo = ghcStructuralInfo1
+instance HasSemanticVersion a => HasSemanticVersion (NE.NonEmpty a) where
+  type SemanticVersion (NE.NonEmpty a) = SemanticVersion a
+
+-------------------------------------------------------------------------------
+-- Basic types
+-------------------------------------------------------------------------------
+
 instance HasStructuralInfo a => HasStructuralInfo (Maybe a)
 instance HasSemanticVersion a => HasSemanticVersion (Maybe a) where
   type SemanticVersion (Maybe a) = SemanticVersion a
@@ -438,7 +457,10 @@ instance (HasStructuralInfo a, HasStructuralInfo b) => HasStructuralInfo (Either
 instance (HasSemanticVersion a, HasSemanticVersion b, KnownNat (SemanticVersion (Either a b))) => HasSemanticVersion (Either a b) where
   type SemanticVersion (Either a b) = Interleave (SemanticVersion a) (SemanticVersion b)
 
--- Tuples
+-------------------------------------------------------------------------------
+-- tuples
+-------------------------------------------------------------------------------
+
 instance (HasStructuralInfo a, HasStructuralInfo b) => HasStructuralInfo (a, b)
 instance (HasStructuralInfo a, HasStructuralInfo b, HasStructuralInfo c) => HasStructuralInfo (a, b, c)
 instance (HasStructuralInfo a, HasStructuralInfo b, HasStructuralInfo c, HasStructuralInfo d) => HasStructuralInfo (a, b, c, d)
@@ -463,7 +485,9 @@ instance (HasSemanticVersion a
          ,KnownNat (SemanticVersion (a, b, c, d))) => HasSemanticVersion (a, b, c, d) where
   type SemanticVersion (a, b, c, d) = Interleave (SemanticVersion a) (SemanticVersion (b, c, d))
 
+-------------------------------------------------------------------------------
 -- Unit
+-------------------------------------------------------------------------------
 
 -- | /Since binary-tagged-0.1.3.0/
 instance HasStructuralInfo () where structuralInfo _ = NominalType "()"
@@ -471,7 +495,9 @@ instance HasStructuralInfo () where structuralInfo _ = NominalType "()"
 -- | /Since binary-tagged-0.1.3.0/
 instance HasSemanticVersion ()
 
--- Fixed
+-------------------------------------------------------------------------------
+-- Data.Fixed
+-------------------------------------------------------------------------------
 
 -- | /Since binary-tagged-0.1.3.0/
 instance HasStructuralInfo a => HasStructuralInfo (Fixed.Fixed a) where
@@ -488,7 +514,9 @@ instance HasStructuralInfo Fixed.E12 where structuralInfo _ = NominalType "E12"
 -- | /Since binary-tagged-0.1.3.0/
 instance HasSemanticVersion (Fixed.Fixed a)
 
--- Version
+-------------------------------------------------------------------------------
+-- Data.Version
+-------------------------------------------------------------------------------
 
 -- | /Since binary-tagged-0.1.3.0/
 instance HasStructuralInfo Version.Version where
@@ -500,7 +528,10 @@ instance HasStructuralInfo Version.Version where
 -- | /Since binary-tagged-0.1.3.0/
 instance HasSemanticVersion Version.Version
 
--- Monoid
+-------------------------------------------------------------------------------
+-- Data.Monoid
+-------------------------------------------------------------------------------
+
 instance HasStructuralInfo a => HasStructuralInfo (Monoid.Sum a)
 instance HasSemanticVersion a => HasSemanticVersion (Monoid.Sum a) where
   type SemanticVersion (Monoid.Sum a) = SemanticVersion a
@@ -509,23 +540,107 @@ instance HasStructuralInfo a => HasStructuralInfo (Monoid.Product a)
 instance HasSemanticVersion a => HasSemanticVersion (Monoid.Product a) where
   type SemanticVersion (Monoid.Product a) = SemanticVersion a
 
--- TODO: add more
+-- | /Since binary-tagged-0.1.4.0/
+instance HasStructuralInfo a => HasStructuralInfo (Monoid.Dual a)
+-- | /Since binary-tagged-0.1.4.0/
+instance HasSemanticVersion a => HasSemanticVersion (Monoid.Dual a) where
+  type SemanticVersion (Monoid.Dual a) = SemanticVersion a
 
--- ByteString
+-- | /Since binary-tagged-0.1.4.0/
+instance HasStructuralInfo a => HasStructuralInfo (Monoid.First a)
+-- | /Since binary-tagged-0.1.4.0/
+instance HasSemanticVersion a => HasSemanticVersion (Monoid.First a) where
+  type SemanticVersion (Monoid.First a) = SemanticVersion a
+
+-- | /Since binary-tagged-0.1.4.0/
+instance HasStructuralInfo a => HasStructuralInfo (Monoid.Last a)
+-- | /Since binary-tagged-0.1.4.0/
+instance HasSemanticVersion a => HasSemanticVersion (Monoid.Last a) where
+  type SemanticVersion (Monoid.Last a) = SemanticVersion a
+
+-- | /Since binary-tagged-0.1.4.0/
+instance HasStructuralInfo Monoid.All
+-- | /Since binary-tagged-0.1.4.0/
+instance  HasSemanticVersion Monoid.All
+
+-- | /Since binary-tagged-0.1.4.0/
+instance HasStructuralInfo Monoid.Any
+-- | /Since binary-tagged-0.1.4.0/
+instance  HasSemanticVersion Monoid.Any
+
+-------------------------------------------------------------------------------
+-- semigroups
+-------------------------------------------------------------------------------
+
+-- | /Since binary-tagged-0.1.4.0/
+instance HasStructuralInfo a => HasStructuralInfo (Semigroup.Min a)
+-- | /Since binary-tagged-0.1.4.0/
+instance HasSemanticVersion a => HasSemanticVersion (Semigroup.Min a) where
+  type SemanticVersion (Semigroup.Min a) = SemanticVersion a
+
+-- | /Since binary-tagged-0.1.4.0/
+instance HasStructuralInfo a => HasStructuralInfo (Semigroup.Max a)
+-- | /Since binary-tagged-0.1.4.0/
+instance HasSemanticVersion a => HasSemanticVersion (Semigroup.Max a) where
+  type SemanticVersion (Semigroup.Max a) = SemanticVersion a
+
+-- | /Since binary-tagged-0.1.4.0/
+instance HasStructuralInfo a => HasStructuralInfo (Semigroup.First a)
+-- | /Since binary-tagged-0.1.4.0/
+instance HasSemanticVersion a => HasSemanticVersion (Semigroup.First a) where
+  type SemanticVersion (Semigroup.First a) = SemanticVersion a
+
+-- | /Since binary-tagged-0.1.4.0/
+instance HasStructuralInfo a => HasStructuralInfo (Semigroup.Last a)
+-- | /Since binary-tagged-0.1.4.0/
+instance HasSemanticVersion a => HasSemanticVersion (Semigroup.Last a) where
+  type SemanticVersion (Semigroup.Last a) = SemanticVersion a
+
+-- | /Since binary-tagged-0.1.4.0/
+instance HasStructuralInfo a => HasStructuralInfo (Semigroup.WrappedMonoid a)
+-- | /Since binary-tagged-0.1.4.0/
+instance HasSemanticVersion a => HasSemanticVersion (Semigroup.WrappedMonoid a) where
+  type SemanticVersion (Semigroup.WrappedMonoid a) = SemanticVersion a
+
+-- | /Since binary-tagged-0.1.4.0/
+instance HasStructuralInfo a => HasStructuralInfo (Semigroup.Option a)
+-- | /Since binary-tagged-0.1.4.0/
+instance HasSemanticVersion a => HasSemanticVersion (Semigroup.Option a) where
+  type SemanticVersion (Semigroup.Option a) = SemanticVersion a
+
+-------------------------------------------------------------------------------
+-- bytestring
+-------------------------------------------------------------------------------
+
 instance HasStructuralInfo BS.ByteString where structuralInfo _ = NominalType "ByteString.Strict"
 instance HasStructuralInfo LBS.ByteString where structuralInfo _ = NominalType "ByteString.Lazy"
 
 instance HasSemanticVersion BS.ByteString
 instance HasSemanticVersion LBS.ByteString
 
--- Text
+-------------------------------------------------------------------------------
+-- nats
+-------------------------------------------------------------------------------
+
+-- | /Since binary-tagged-0.1.4.0/
+instance HasStructuralInfo Natural.Natural where structuralInfo _ = NominalType "Numeric.Natural"
+-- | /Since binary-tagged-0.1.4.0/
+instance HasSemanticVersion Natural.Natural
+
+-------------------------------------------------------------------------------
+-- text
+-------------------------------------------------------------------------------
+
 instance HasStructuralInfo S.Text where structuralInfo _ = NominalType "Text.Strict"
 instance HasStructuralInfo L.Text where structuralInfo _ = NominalType "Text.Lazy"
 
 instance HasSemanticVersion S.Text
 instance HasSemanticVersion L.Text
 
--- Containers
+-------------------------------------------------------------------------------
+-- containers
+-------------------------------------------------------------------------------
+
 instance HasStructuralInfo a => HasStructuralInfo (IntMap.IntMap a) where
   structuralInfo _ = NominalNewtype "IntMap" $ structuralInfo (Proxy :: Proxy a)
 instance HasSemanticVersion a => HasSemanticVersion (IntMap.IntMap a) where
@@ -550,7 +665,9 @@ instance HasStructuralInfo a => HasStructuralInfo (Set.Set a) where
 instance HasSemanticVersion a => HasSemanticVersion (Set.Set a) where
   type SemanticVersion (Set.Set a) = SemanticVersion a
 
--- Unordered containers
+-------------------------------------------------------------------------------
+-- unordered-containers
+-------------------------------------------------------------------------------
 
 instance (HasStructuralInfo k, HasStructuralInfo v) => HasStructuralInfo (HML.HashMap k v) where
   structuralInfo _ = StructuralInfo "HashMap" [[ structuralInfo (Proxy :: Proxy k), structuralInfo (Proxy :: Proxy v) ]]
@@ -562,7 +679,10 @@ instance HasStructuralInfo a => HasStructuralInfo (HS.HashSet a) where
 instance HasSemanticVersion a => HasSemanticVersion (HS.HashSet a) where
   type SemanticVersion (HS.HashSet a) = SemanticVersion a
 
--- Array
+-------------------------------------------------------------------------------
+-- array
+-------------------------------------------------------------------------------
+
 instance (HasStructuralInfo i, HasStructuralInfo e) => HasStructuralInfo (Array.Array i e) where
   structuralInfo _ = StructuralInfo "Array" [[ structuralInfo (Proxy :: Proxy i), structuralInfo (Proxy :: Proxy e) ]]
 instance (HasSemanticVersion i, HasSemanticVersion e, KnownNat (SemanticVersion (Array.Array i e))) => HasSemanticVersion (Array.Array i e) where
@@ -573,7 +693,9 @@ instance (HasStructuralInfo i, HasStructuralInfo e) => HasStructuralInfo (Array.
 instance (HasSemanticVersion i, HasSemanticVersion e, KnownNat (SemanticVersion (Array.UArray i e))) => HasSemanticVersion (Array.UArray i e) where
   type SemanticVersion (Array.UArray i e) = Interleave (SemanticVersion i) (SemanticVersion e)
 
--- Vector
+-------------------------------------------------------------------------------
+-- vector
+-------------------------------------------------------------------------------
 
 instance HasStructuralInfo a => HasStructuralInfo (V.Vector a) where
   structuralInfo _ = NominalNewtype "Vector" $ structuralInfo (Proxy :: Proxy a)
@@ -590,7 +712,9 @@ instance HasStructuralInfo a => HasStructuralInfo (S.Vector a) where
 instance HasSemanticVersion a => HasSemanticVersion (S.Vector a) where
   type SemanticVersion (S.Vector a) = SemanticVersion a
 
--- Time
+-------------------------------------------------------------------------------
+-- time
+-------------------------------------------------------------------------------
 
 instance HasStructuralInfo Time.UTCTime where structuralInfo _ = NominalType "UTCTime"
 instance HasStructuralInfo Time.DiffTime where structuralInfo _ = NominalType "DiffTime"
@@ -610,8 +734,11 @@ instance HasSemanticVersion Time.TimeZone
 instance HasSemanticVersion Time.TimeOfDay
 instance HasSemanticVersion Time.LocalTime
 
+-------------------------------------------------------------------------------
+-- aeson
+-------------------------------------------------------------------------------
+
 #ifdef MIN_VERSION_aeson
--- Value
 
 -- TODO: derive sop
 instance HasStructuralInfo Aeson.Value where structuralInfo _ = NominalType "Aeson.Value"
