@@ -1,3 +1,5 @@
+- 0.1.4.1 (2016-09-20)
+    - Print mismatching hashes in base16 encoding
 - 0.1.4.0 (2016-04-12)
     - Add semigroups types
     - Add Natural
