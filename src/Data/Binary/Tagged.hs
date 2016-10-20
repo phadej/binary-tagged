@@ -97,6 +97,7 @@ import           Data.Binary
 import           Data.Binary.Get (ByteOffset)
 import           Data.ByteString as BS
 import           Data.ByteString.Lazy as LBS
+import qualified Data.ByteString.Base16.Lazy as Base16
 import           Data.Digest.Pure.SHA
 import           Data.Monoid ((<>))
 import           Data.Proxy
@@ -222,7 +223,7 @@ instance (Binary a, HasStructuralInfo a, KnownNat v) => Binary (BinaryTagged v a
          then do hash <- get
                  if hash == hash'
                     then fmap BinaryTagged get
-                    else fail $ "Non matching structure hashes: got" <> show hash <> "; expected: " <> show hash'
+                    else fail $ "Non matching structure hashes: got" <> show (Base16.encode hash) <> "; expected: " <> show (Base16.encode hash')
          else fail $ "Non matching versions: got " <> show ver <> "; expected: " <> show ver'
     where
       proxyV = Proxy :: Proxy v
