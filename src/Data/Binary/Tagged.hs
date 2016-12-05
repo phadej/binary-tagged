@@ -354,9 +354,11 @@ sopStructuralInfo1S nsop di = NominalNewtype (datatypeName di) nsop
 -- SOP helpers
 -------------------------------------------------------------------------------
 
+#if !MIN_VERSION_generics_sop(0,2,3)
 datatypeName :: DatatypeInfo xss -> DatatypeName
 datatypeName (Newtype _ d _)  = d
 datatypeName (ADT _ d _)      = d
+#endif
 
 -- | Interleaving
 --
