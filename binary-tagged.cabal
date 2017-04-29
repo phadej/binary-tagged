@@ -1,6 +1,6 @@
 name:           binary-tagged
 version:        0.1.4.2
-x-revision:     4
+x-revision:     5
 synopsis:       Tagged binary serialisation.
 description:    Check <https://github.com/phadej/binary-tagged#readme README on Github>
 category:       Web
