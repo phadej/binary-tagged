@@ -1,3 +1,6 @@
+- 0.1.5 (2018-05-20)
+    - GHC-8.4.2
+    - Don't depend on nats and semigroups on newer GHC
 - 0.1.4.2 (2016-12-05)
     - Fix compilation with generics-sop-0.2.3.0
 - 0.1.4.1 (2016-09-20)
