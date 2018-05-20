@@ -201,6 +201,9 @@ instance Monad (BinaryTagged v) where
   return = BinaryTagged
   BinaryTagged m >>= k = k m
 
+instance Semigroup.Semigroup a => Semigroup.Semigroup (BinaryTagged v a) where
+  (<>) = liftA2 (Semigroup.<>)
+
 instance Monoid.Monoid a => Monoid.Monoid (BinaryTagged v a) where
   mempty   = pure Monoid.mempty
   mappend  = liftA2 Monoid.mappend
