@@ -374,7 +374,7 @@ datatypeName (ADT _ d _)      = d
 --
 -- This can be calculated by @f x y = sum ([0..x+y]) + y@
 type Interleave (n :: Nat) (m :: Nat) = SumUpTo (n + m) + m
-type SumUpTo (n :: Nat) = Div2 (n * (n + 1))
+type SumUpTo (n :: Nat) = Div2 (n GHC.TypeLits.* (n + 1))
 type family Div2 (n :: Nat) :: Nat where
   Div2 0 = 0
   Div2 1 = 0

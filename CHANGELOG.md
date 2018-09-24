@@ -1,3 +1,5 @@
+- 0.1.5.1. (2018-09-24)
+    - GHC-8.6.1
 - 0.1.5 (2018-05-20)
     - GHC-8.4.2
     - Don't depend on nats and semigroups on newer GHC
