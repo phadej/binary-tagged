@@ -103,10 +103,7 @@ import           Data.Monoid ((<>))
 import           Data.Proxy
 import           Generics.SOP as SOP
 import           Generics.SOP.GGP as SOP
-
-#if MIN_VERSION_generics_sop(0,2,0)
 import           Generics.SOP.Constraint as SOP
-#endif
 
 #if !MIN_VERSION_base(4,8,0)
 import           Data.Foldable (Foldable)
@@ -263,11 +260,7 @@ class HasStructuralInfo a where
   default structuralInfo :: ( GHC.Generic a
                             , All2 HasStructuralInfo (GCode a)
                             , GDatatypeInfo a
-#if MIN_VERSION_generics_sop(0,2,0)
                             , SListI2 (GCode a)
-#else
-                            , SingI (GCode a)
-#endif
                             ) => Proxy a -> StructuralInfo
   structuralInfo = ghcStructuralInfo
 
@@ -294,11 +287,7 @@ structuralInfoSha1ByteStringDigest = bytestringDigest . structuralInfoSha1Digest
 ghcStructuralInfo :: ( GHC.Generic a
                      , All2 HasStructuralInfo (GCode a)
                      , GDatatypeInfo a
-#if MIN_VERSION_generics_sop(0,2,0)
                      , SListI2 (GCode a)
-#else
-                     , SingI (GCode a)
-#endif
                      )
                   => Proxy a
                   -> StructuralInfo
@@ -316,16 +305,12 @@ sopStructuralInfo :: forall a. (Generic a, HasDatatypeInfo a, All2 HasStructural
 sopStructuralInfo proxy = sopStructuralInfoS (datatypeInfo proxy)
 
 sopStructuralInfoS :: forall xss. ( All2 HasStructuralInfo xss
-#if MIN_VERSION_generics_sop(0,2,0)
                                   , SListI2 xss
-#else
-                                  , SingI xss
-#endif
                                   )
                    => DatatypeInfo xss
                    -> StructuralInfo
 sopStructuralInfoS di@(Newtype _ _ ci)  = NominalNewtype (datatypeName di) (sopNominalNewtype ci)
-sopStructuralInfoS di@(ADT _ _ _)       = StructuralInfo (datatypeName di) (sopNominalAdtPOP (hpure Proxy :: POP Proxy xss))
+sopStructuralInfoS di@ADT {}            = StructuralInfo (datatypeName di) (sopNominalAdtPOP (hpure Proxy :: POP Proxy xss))
 
 sopNominalNewtype :: forall x. HasStructuralInfo x => ConstructorInfo '[x] -> StructuralInfo
 sopNominalNewtype _ = structuralInfo (Proxy :: Proxy x)
@@ -356,12 +341,6 @@ sopStructuralInfo1S nsop di = NominalNewtype (datatypeName di) nsop
 -------------------------------------------------------------------------------
 -- SOP helpers
 -------------------------------------------------------------------------------
-
-#if !MIN_VERSION_generics_sop(0,2,3)
-datatypeName :: DatatypeInfo xss -> DatatypeName
-datatypeName (Newtype _ d _)  = d
-datatypeName (ADT _ d _)      = d
-#endif
 
 -- | Interleaving
 --
