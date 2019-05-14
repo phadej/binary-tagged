@@ -11,7 +11,11 @@ import           Data.Either
 import           Data.Monoid
 import           Data.Proxy
 import           Test.Tasty
+import           Test.Tasty.HUnit (testCase, (@?=))
 import           Test.Tasty.QuickCheck
+
+import qualified Data.ByteString.Lazy.Char8 as BS8
+import qualified Data.ByteString.Base16.Lazy as Base16 
 
 import qualified Rec1
 import qualified Rec2
@@ -22,6 +26,11 @@ main = defaultMain $ testGroup "Tests"
   , wrongRoundtrips
   , failedRoundtrips
   , testProperty "Interleave" interleaveProp
+  , testCase "An example hash" $ do
+    let hash = structuralInfoSha1ByteStringDigest
+             $ structuralInfo (Proxy :: Proxy [Either (Maybe Char) (Sum Int)])
+
+    Base16.encode hash @?= BS8.pack "acff3d40f6f06f87b4da8d3d3eb5682251867cc5"
   ]
 
 -- | We actually check that this compiles.

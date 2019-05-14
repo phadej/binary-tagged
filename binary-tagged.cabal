@@ -92,10 +92,11 @@ test-suite binary-tagged-test
     , unordered-containers
     , vector
     , binary-tagged
-    , binary-orphans
+    , binary-orphans <1
     , bifunctors
     , quickcheck-instances
     , tasty
+    , tasty-hunit
     , tasty-quickcheck
   if !impl(ghc >= 8.0)
     build-depends:
