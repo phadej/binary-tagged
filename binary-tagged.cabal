@@ -4,7 +4,46 @@ version:            0.2
 synopsis:           Tagged binary serialisation.
 category:           Data
 description:
-  Check <https://github.com/phadej/binary-tagged#readme README on Github>
+  Structurally tag binary serialisation stream.
+  .
+  Say you have:
+  .
+  @
+  data Record = Record
+  \  { _recordFields  :: HM.HashMap Text (Integer, ByteString)
+  \  , _recordEnabled :: Bool
+  \  }
+  \  deriving (Eq, Show, Generic)
+  .
+  instance Binary Record
+  instance HasStructuralInfo Record
+  instance HasSemanticVersion Record
+  @
+  .
+  then you can serialise and deserialise @Record@ values with a structure tag by simply
+  .
+  @
+  encodeTaggedFile "cachefile" record
+  decodeTaggedFile "cachefile" :: IO Record
+  @
+  .
+  If structure of @Record@ changes in between, deserialisation will fail early.
+  .
+  The overhead is next to non-observable, see [a simple benchmark](https://github.com/phadej/binary-tagged/blob/master/bench/Bench.hs).
+  .
+  @
+  benchmarking encode/Binary
+  time                 362.6 μs   (361.2 μs .. 363.8 μs)
+  .
+  benchmarking encode/Tagged
+  time                 379.2 μs   (375.5 μs .. 382.2 μs)
+  .
+  benchmarking decode/Binary
+  time                 366.3 μs   (365.1 μs .. 368.1 μs)
+  .
+  benchmarking decode/Tagged
+  time                 367.6 μs   (367.0 μs .. 368.2 μs)
+  @
 
 homepage:           https://github.com/phadej/binary-tagged#readme
 bug-reports:        https://github.com/phadej/binary-tagged/issues
