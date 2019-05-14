@@ -3,7 +3,8 @@ module Main (main) where
 
 import Control.DeepSeq
 import Data.ByteString.Lazy as LBS
-import Data.Binary.Orphans
+import Data.Binary
+import Data.Binary.Instances ()
 import Data.Binary.Tagged
 import Criterion.Main
 import qualified Data.HashMap.Strict as HM

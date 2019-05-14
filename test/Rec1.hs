@@ -6,7 +6,8 @@ module Rec1 where
 import Control.Applicative
 #endif
 
-import Data.Binary.Orphans
+import Data.Binary
+import Data.Binary.Instances ()
 import Data.Binary.Tagged
 import Data.Monoid
 import GHC.Generics

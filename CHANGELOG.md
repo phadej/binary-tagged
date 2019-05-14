@@ -1,4 +1,8 @@
-- 0.1.5.2 (2010-05-10)
+- 0.2 (2019-05-14)
+    - use cryptohash-sha1,
+      types of structuralInfoSha1Digest and structuralInfoSha1Digest are changed.
+    - Use binary-instances in tests
+- 0.1.5.2 (2019-05-10)
     - generics-sop-0.5
 - 0.1.5.1 (2018-09-24)
     - GHC-8.6.1

@@ -1,25 +1,25 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DefaultSignatures #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveFoldable #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveTraversable #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE CPP                    #-}
+{-# LANGUAGE ConstraintKinds        #-}
+{-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE DefaultSignatures      #-}
+{-# LANGUAGE DeriveDataTypeable     #-}
+{-# LANGUAGE DeriveFoldable         #-}
+{-# LANGUAGE DeriveFunctor          #-}
+{-# LANGUAGE DeriveGeneric          #-}
+{-# LANGUAGE DeriveTraversable      #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE FlexibleInstances      #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE PolyKinds #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE GADTs                  #-}
+{-# LANGUAGE KindSignatures         #-}
+{-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE PolyKinds              #-}
+{-# LANGUAGE RankNTypes             #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE TypeOperators          #-}
 -- We need this for Interleave
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableInstances   #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Data.Binary.Tagged
@@ -93,60 +93,60 @@ module Data.Binary.Tagged
 
 import           Control.Applicative
 import           Control.Monad
+import qualified Crypto.Hash.SHA1        as SHA1
 import           Data.Binary
-import           Data.Binary.Get (ByteOffset)
-import           Data.ByteString as BS
-import           Data.ByteString.Lazy as LBS
-import qualified Data.ByteString.Base16.Lazy as Base16
-import           Data.Digest.Pure.SHA
-import           Data.Monoid ((<>))
-import           Data.Proxy
-import           Generics.SOP as SOP
-import           Generics.SOP.GGP as SOP
+import           Data.Binary.Get         (ByteOffset)
+import           Data.ByteString         as BS
+import qualified Data.ByteString.Base16  as Base16
+import           Data.ByteString.Lazy    as LBS
+import           Data.Monoid             ((<>))
+import           Data.Typeable           (Typeable)
+import           Generics.SOP            as SOP
 import           Generics.SOP.Constraint as SOP
+import           Generics.SOP.GGP        as SOP
 
 #if !MIN_VERSION_base(4,8,0)
-import           Data.Foldable (Foldable)
-import           Data.Traversable (Traversable)
+import           Data.Foldable           (Foldable)
+import           Data.Traversable        (Traversable)
 #endif
 
-import qualified GHC.Generics as GHC
+import qualified GHC.Generics            as GHC
 import           GHC.TypeLits
 
 -- Instances
+import qualified Data.Array.IArray       as Array
+import qualified Data.Array.Unboxed      as Array
+import qualified Data.Fixed              as Fixed
+import qualified Data.HashMap.Lazy       as HML
+import qualified Data.HashSet            as HS
 import           Data.Int
-import qualified Data.Array.IArray as Array
-import qualified Data.Array.Unboxed as Array
-import qualified Data.Fixed as Fixed
-import qualified Data.HashMap.Lazy as HML
-import qualified Data.HashSet as HS
-import qualified Data.IntMap as IntMap
-import qualified Data.IntSet as IntSet
-import qualified Data.List.NonEmpty as NE
-import qualified Data.Map as Map
-import qualified Data.Monoid as Monoid
-import qualified Data.Ratio as Ratio
-import qualified Data.Semigroup as Semigroup
-import qualified Data.Sequence as Seq
-import qualified Data.Set as Set
-import qualified Data.Text as S
-import qualified Data.Text.Lazy as L
-import qualified Data.Time as Time
-import qualified Data.Vector as V
-import qualified Data.Vector.Storable as S
-import qualified Data.Vector.Unboxed as U
-import qualified Data.Version as Version
-import qualified Numeric.Natural as Natural
+import qualified Data.IntMap             as IntMap
+import qualified Data.IntSet             as IntSet
+import qualified Data.List.NonEmpty      as NE
+import qualified Data.Map                as Map
+import qualified Data.Monoid             as Monoid
+import qualified Data.Ratio              as Ratio
+import qualified Data.Semigroup          as Semigroup
+import qualified Data.Sequence           as Seq
+import qualified Data.Set                as Set
+import qualified Data.Text               as S
+import qualified Data.Text.Lazy          as L
+import qualified Data.Time               as Time
+import qualified Data.Vector             as V
+import qualified Data.Vector.Storable    as S
+import qualified Data.Vector.Unboxed     as U
+import qualified Data.Version            as Version
+import qualified Numeric.Natural         as Natural
 
 #ifdef MIN_VERSION_aeson
-import qualified Data.Aeson as Aeson
+import qualified Data.Aeson              as Aeson
 #endif
 
 -- | 'Binary' serialisable class, which tries to be less error-prone to data structure changes.
 --
 -- Values are serialised with header consisting of version @v@ and hash of 'structuralInfo'.
 newtype BinaryTagged (v :: k) a = BinaryTagged { unBinaryTagged :: a }
-  deriving (Eq, Ord, Show, Read, Functor, Foldable, Traversable, GHC.Generic, GHC.Generic1)
+  deriving (Eq, Ord, Show, Read, Functor, Foldable, Traversable, GHC.Generic, GHC.Generic1, Typeable)
 -- TODO: Derive Enum, Bounded, Typeable, Data, Hashable, NFData, Numeric classes?
 
 type BinaryTagged' a = BinaryTagged (SemanticVersion a) a
@@ -229,13 +229,13 @@ instance (Binary a, HasStructuralInfo a, KnownNat v) => Binary (BinaryTagged v a
       proxyV = Proxy :: Proxy v
       proxyA = Proxy :: Proxy a
       ver' = fromIntegral (natVal proxyV) :: Version
-      hash' = bytestringDigest . structuralInfoSha1Digest . structuralInfo $ proxyA
+      hash' = structuralInfoSha1Digest . structuralInfo $ proxyA
 
 -- | Data type structure, with (some) nominal information.
 data StructuralInfo = NominalType String
                 | NominalNewtype String StructuralInfo
                 | StructuralInfo String [[StructuralInfo]]
-  deriving (Eq, Ord, Show, GHC.Generic)
+  deriving (Eq, Ord, Show, GHC.Generic, Typeable)
 
 instance Binary StructuralInfo
 
@@ -274,11 +274,12 @@ class KnownNat (SemanticVersion a) => HasSemanticVersion (a :: *) where
 instance HasStructuralInfo StructuralInfo
 instance HasSemanticVersion StructuralInfo
 
-structuralInfoSha1Digest :: StructuralInfo -> Digest SHA1State
-structuralInfoSha1Digest = sha1 . encode
+structuralInfoSha1Digest :: StructuralInfo -> BS.ByteString
+structuralInfoSha1Digest = SHA1.hashlazy . encode
 
-structuralInfoSha1ByteStringDigest :: StructuralInfo -> LBS.ByteString
-structuralInfoSha1ByteStringDigest = bytestringDigest . structuralInfoSha1Digest
+{-# DEPRECATED structuralInfoSha1ByteStringDigest "Use structuralInfoSha1Digest directly" #-}
+structuralInfoSha1ByteStringDigest :: StructuralInfo -> BS.ByteString
+structuralInfoSha1ByteStringDigest = structuralInfoSha1Digest
 
 -------------------------------------------------------------------------------
 -- Generics
@@ -319,8 +320,8 @@ sopNominalAdtPOP :: (All2 HasStructuralInfo xss) => POP Proxy xss -> [[Structura
 sopNominalAdtPOP (POP np2) = sopNominalAdt np2
 
 sopNominalAdt :: (All2 HasStructuralInfo xss) => NP (NP Proxy) xss -> [[StructuralInfo]]
-sopNominalAdt Nil          = []
-sopNominalAdt (p :* ps)  = sopStructuralInfoP p : sopNominalAdt ps
+sopNominalAdt Nil       = []
+sopNominalAdt (p :* ps) = sopStructuralInfoP p : sopNominalAdt ps
 
 sopStructuralInfoP :: (All HasStructuralInfo xs) => NP Proxy xs -> [StructuralInfo]
 sopStructuralInfoP Nil = []
