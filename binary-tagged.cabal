@@ -1,6 +1,7 @@
 cabal-version:      >=1.10
 name:               binary-tagged
 version:            0.2
+x-revision:         1
 synopsis:           Tagged binary serialisation.
 category:           Data
 description:
