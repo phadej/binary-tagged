@@ -1,25 +1,24 @@
-{-# LANGUAGE CPP                    #-}
-{-# LANGUAGE ConstraintKinds        #-}
-{-# LANGUAGE DataKinds              #-}
-{-# LANGUAGE DefaultSignatures      #-}
-{-# LANGUAGE DeriveDataTypeable     #-}
-{-# LANGUAGE DeriveFoldable         #-}
-{-# LANGUAGE DeriveFunctor          #-}
-{-# LANGUAGE DeriveGeneric          #-}
-{-# LANGUAGE DeriveTraversable      #-}
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE GADTs                  #-}
-{-# LANGUAGE KindSignatures         #-}
-{-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE PolyKinds              #-}
-{-# LANGUAGE RankNTypes             #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
-{-# LANGUAGE TypeFamilies           #-}
-{-# LANGUAGE TypeOperators          #-}
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE DefaultSignatures     #-}
+{-# LANGUAGE DeriveDataTypeable    #-}
+{-# LANGUAGE DeriveFoldable        #-}
+{-# LANGUAGE DeriveFunctor         #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DeriveTraversable     #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
 -- We need this for Interleave
-{-# LANGUAGE UndecidableInstances   #-}
+{-# LANGUAGE UndecidableInstances  #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Data.Binary.Tagged
@@ -106,40 +105,40 @@ import           Generics.SOP.Constraint as SOP
 import           Generics.SOP.GGP        as SOP
 
 #if !MIN_VERSION_base(4,8,0)
-import           Data.Foldable           (Foldable)
-import           Data.Traversable        (Traversable)
+import Data.Foldable    (Foldable)
+import Data.Traversable (Traversable)
 #endif
 
-import qualified GHC.Generics            as GHC
+import qualified GHC.Generics as GHC
 import           GHC.TypeLits
 
 -- Instances
-import qualified Data.Array.IArray       as Array
-import qualified Data.Array.Unboxed      as Array
-import qualified Data.Fixed              as Fixed
-import qualified Data.HashMap.Lazy       as HML
-import qualified Data.HashSet            as HS
+import qualified Data.Array.IArray    as Array
+import qualified Data.Array.Unboxed   as Array
+import qualified Data.Fixed           as Fixed
+import qualified Data.HashMap.Lazy    as HML
+import qualified Data.HashSet         as HS
 import           Data.Int
-import qualified Data.IntMap             as IntMap
-import qualified Data.IntSet             as IntSet
-import qualified Data.List.NonEmpty      as NE
-import qualified Data.Map                as Map
-import qualified Data.Monoid             as Monoid
-import qualified Data.Ratio              as Ratio
-import qualified Data.Semigroup          as Semigroup
-import qualified Data.Sequence           as Seq
-import qualified Data.Set                as Set
-import qualified Data.Text               as S
-import qualified Data.Text.Lazy          as L
-import qualified Data.Time               as Time
-import qualified Data.Vector             as V
-import qualified Data.Vector.Storable    as S
-import qualified Data.Vector.Unboxed     as U
-import qualified Data.Version            as Version
-import qualified Numeric.Natural         as Natural
+import qualified Data.IntMap          as IntMap
+import qualified Data.IntSet          as IntSet
+import qualified Data.List.NonEmpty   as NE
+import qualified Data.Map             as Map
+import qualified Data.Monoid          as Monoid
+import qualified Data.Ratio           as Ratio
+import qualified Data.Semigroup       as Semigroup
+import qualified Data.Sequence        as Seq
+import qualified Data.Set             as Set
+import qualified Data.Text            as T
+import qualified Data.Text.Lazy       as LT
+import qualified Data.Time            as Time
+import qualified Data.Vector          as V
+import qualified Data.Vector.Storable as S
+import qualified Data.Vector.Unboxed  as U
+import qualified Data.Version         as Version
+import qualified Numeric.Natural      as Natural
 
 #ifdef MIN_VERSION_aeson
-import qualified Data.Aeson              as Aeson
+import qualified Data.Aeson as Aeson
 #endif
 
 -- | 'Binary' serialisable class, which tries to be less error-prone to data structure changes.
@@ -617,11 +616,11 @@ instance HasSemanticVersion Natural.Natural
 -- text
 -------------------------------------------------------------------------------
 
-instance HasStructuralInfo S.Text where structuralInfo _ = NominalType "Text.Strict"
-instance HasStructuralInfo L.Text where structuralInfo _ = NominalType "Text.Lazy"
+instance HasStructuralInfo T.Text where structuralInfo _ = NominalType "Text.Strict"
+instance HasStructuralInfo LT.Text where structuralInfo _ = NominalType "Text.Lazy"
 
-instance HasSemanticVersion S.Text
-instance HasSemanticVersion L.Text
+instance HasSemanticVersion T.Text
+instance HasSemanticVersion LT.Text
 
 -------------------------------------------------------------------------------
 -- containers
