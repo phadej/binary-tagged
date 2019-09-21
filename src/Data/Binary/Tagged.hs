@@ -101,7 +101,7 @@ import           Data.ByteString.Lazy    as LBS
 import           Data.Monoid             ((<>))
 import           Data.Typeable           (Typeable)
 import           Generics.SOP            as SOP
-import           Generics.SOP.Constraint as SOP
+-- -- -- -- -- -- -- -- -- import           Generics.SOP.Constraint as SOP
 import           Generics.SOP.GGP        as SOP
 
 #if !MIN_VERSION_base(4,8,0)
