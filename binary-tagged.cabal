@@ -1,57 +1,40 @@
-cabal-version:      >=1.10
+cabal-version:      2.2
 name:               binary-tagged
-version:            0.2
-x-revision:         1
-synopsis:           Tagged binary serialisation.
+version:            1.0
+synopsis:           Tagged binary serialisation
 category:           Data
 description:
   Structurally tag binary serialisation stream.
   .
-  Say you have:
+  Structurally tag binary serialisaton stream.
+  Useful when most 'Binary' instances are 'Generic' derived.
+  .
+  Say you have a data type
   .
   @
   data Record = Record
-  \  { _recordFields  :: HM.HashMap Text (Integer, ByteString)
-  \  , _recordEnabled :: Bool
-  \  }
-  \  deriving (Eq, Show, Generic)
+    { _recordFields  :: HM.HashMap Text (Integer, ByteString)
+    , _recordEnabled :: Bool
+    }
+    deriving (Eq, Show, Generic)
   .
-  instance Binary Record
-  instance HasStructuralInfo Record
-  instance HasSemanticVersion Record
+  instance 'Binary' Record
+  instance 'Structured' Record
   @
   .
   then you can serialise and deserialise @Record@ values with a structure tag by simply
   .
   @
-  encodeTaggedFile "cachefile" record
-  decodeTaggedFile "cachefile" :: IO Record
-  @
-  .
-  If structure of @Record@ changes in between, deserialisation will fail early.
-  .
-  The overhead is next to non-observable, see [a simple benchmark](https://github.com/phadej/binary-tagged/blob/master/bench/Bench.hs).
-  .
-  @
-  benchmarking encode/Binary
-  time                 362.6 μs   (361.2 μs .. 363.8 μs)
-  .
-  benchmarking encode/Tagged
-  time                 379.2 μs   (375.5 μs .. 382.2 μs)
-  .
-  benchmarking decode/Binary
-  time                 366.3 μs   (365.1 μs .. 368.1 μs)
-  .
-  benchmarking decode/Tagged
-  time                 367.6 μs   (367.0 μs .. 368.2 μs)
+  'structuredEncode' record :: 'LBS.ByteString'
+  'structuredDecode' lbs :: IO Record
   @
 
 homepage:           https://github.com/phadej/binary-tagged#readme
 bug-reports:        https://github.com/phadej/binary-tagged/issues
 author:             Oleg Grenrus <oleg.grenrus@iki.fi>
 maintainer:         Oleg Grenrus <oleg.grenrus@iki.fi>
-license:            GPL-2.0
-license-file:       LICENSE
+license:            GPL-2.0-or-later
+license-file:       LICENSE LICENSE.GPLv2 LICENSE.GPLv3
 build-type:         Simple
 tested-with:
   GHC ==7.8.4
@@ -81,34 +64,34 @@ library
 
   -- Libraries bundled with GHC
   build-depends:
-      array       >=0.5.0.0  && <0.6
+    , array       ^>=0.5.0.0
     , base        >=4.7.0.2  && <4.14
-    , binary      >=0.8.5.1  && <0.10
-    , bytestring  >=0.10.4.0 && <0.11
-    , containers  >=0.5.5.1  && <0.7
-    , text        >=1.2.3.0  && <1.3
+    , binary      ^>=0.8.5.1
+    , bytestring  ^>=0.10.4.0
+    , containers  ^>=0.5.5.1 || ^>=0.6.0.1
+    , text        ^>=1.2.3.0
 
   -- other dependencies
   build-depends:
-      base16-bytestring     >=0.1.1.6    && <0.2
-    , cryptohash-sha1       >=0.11.100.1 && <0.12
-    , hashable              >=1.2        && <1.4
-    , scientific            >=0.3        && <0.4
-    , tagged                >=0.7        && <0.9
-    , time-compat           >=1.9.2.2    && <1.10
-    , unordered-containers  >=0.2        && <0.3
-    , vector                >=0.10       && <0.13
+    , base16-bytestring     ^>=0.1.1.6
+    , cryptohash-sha1       ^>=0.11.100.1
+    , hashable              ^>=1.2.7.0 || ^>=1.3.0.0
+    , scientific            ^>=0.3
+    , tagged                ^>=0.8.6
+    , time-compat           ^>=1.9.2.2
+    , unordered-containers  ^>=0.2
+    , vector                ^>=0.12.0.0
 
   if flag(aeson)
-    build-depends: aeson >=1.4.5.0 && <1.5
+    build-depends: aeson ^>=1.4.5.0
 
   if !impl(ghc >=8.0)
     build-depends: semigroups >=0.18.5 && <0.20
 
   if !impl(ghc >=7.10)
     build-depends:
-        nats  >=1.1.2 && <1.2
-      , void  >=0.7.3 && <0.8
+      , nats  ^>=1.1.2
+      , void  ^>=0.7.3
 
 test-suite binary-tagged-test
   type:             exitcode-stdio-1.0
@@ -116,19 +99,20 @@ test-suite binary-tagged-test
   hs-source-dirs:   test
   ghc-options:      -Wall
   build-depends:
-      aeson
+    , aeson
     , array
     , base
     , base16-bytestring
     , bifunctors
     , binary
-    , binary-instances      >=1 && <1.1
+    , binary-instances      ^>=1
     , binary-tagged
     , bytestring
     , containers
     , generics-sop
     , hashable
-    , QuickCheck >=2.13 && <2.14
+    , lens                  ^>=4.18.1
+    , QuickCheck            ^>=2.13
     , quickcheck-instances
     , scientific
     , tagged
@@ -136,7 +120,6 @@ test-suite binary-tagged-test
     , tasty-hunit
     , tasty-quickcheck
     , text
-    , lens >=4.18 && <4.19
     , time
     , unordered-containers
     , vector
@@ -160,7 +143,7 @@ benchmark binary-tagged-bench
   hs-source-dirs:   bench
   ghc-options:      -Wall
   build-depends:
-      aeson
+    , aeson
     , array
     , base
     , base16-bytestring

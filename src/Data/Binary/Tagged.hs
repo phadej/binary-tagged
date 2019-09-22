@@ -9,12 +9,12 @@
 -- |
 --
 -- Copyright: (c) 2019 Oleg Grenrus
--- License: GPL-3.0-or-later
+-- License: GPL-2.0-or-later
 --
 -- Structurally tag binary serialisaton stream.
 -- Useful when most 'Binary' instances are 'Generic' derived.
 --
--- Say you have:
+-- Say you have a data type
 --
 -- @
 -- data Record = Record
@@ -45,6 +45,8 @@ module Data.Binary.Tagged (
     structuredDecodeOrFail,
     -- * Structured class
     Structured (structure),
+    Hash,
+    structureHash,
     genericStructure,
     GStructured,
     nominalStructure,
@@ -56,7 +58,7 @@ module Data.Binary.Tagged (
     ConstructorName,
     TypeVersion,
     SopStructure,
-    structureHash,
+    hashStructure,
     typeVersion,
     typeName,
     ) where
@@ -130,8 +132,8 @@ instance Structured Structure
 type SopStructure = [(ConstructorName, [Structure])]
 
 -- | A hash digest of 'Structure'. A 20 bytes strict 'BS.ByteString'.
-structureHash :: Structure -> BS.ByteString
-structureHash = SHA1.hashlazy . Binary.encode
+hashStructure :: Structure -> BS.ByteString
+hashStructure = SHA1.hashlazy . Binary.encode
 
 -- | A van-Laarhoven lens into 'TypeVersion' of 'Structure'
 --
@@ -174,8 +176,15 @@ class Structured a where
     structure = genericStructure
 
     -- This member is hidden. It's there to precalc
-    structureHash' :: Tagged a BS.ByteString
-    structureHash' = Tagged (structureHash (structure (Proxy :: Proxy a)))
+    structureHash' :: Tagged a Hash
+    structureHash' = Tagged (hashStructure (structure (Proxy :: Proxy a)))
+
+-- | Hash (of Structure) is 20 bytes long strict 'BS.ByteString'.
+type Hash = BS.ByteString
+
+-- | Semantically @'hashStructure' . 'structure'@.
+structureHash :: forall a. Structured a => Proxy a -> Hash
+structureHash _ = untag (structureHash' :: Tagged a Hash)
 
 -------------------------------------------------------------------------------
 -- Functions
@@ -392,6 +401,9 @@ instance Structured Time.Day             where structure = nominalStructure
 instance Structured Time.TimeZone        where structure = nominalStructure
 instance Structured Time.TimeOfDay       where structure = nominalStructure
 instance Structured Time.LocalTime       where structure = nominalStructure
+instance Structured Time.DayOfWeek       where structure = nominalStructure
 
 instance Structured (Proxy a)
 instance Structured a => Structured (Tagged b a)
+
+-- TODO: array instances

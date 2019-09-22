@@ -32,8 +32,7 @@ main = defaultMain $ testGroup "Tests"
   , wrongRoundtrips
   , failedRoundtrips
   , testCase "An example hash" $ do
-    let hash = structureHash
-             $ structure (Proxy :: Proxy [Either (Maybe Char) (Sum Int)])
+    let hash = structureHash (Proxy :: Proxy [Either (Maybe Char) (Sum Int)])
 
     Base16.encode hash @?= BS8.pack "c116be43b77d6fe3e79dc76e235f9a46a109a395"
   ]
