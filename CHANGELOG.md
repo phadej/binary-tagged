@@ -1,3 +1,6 @@
+- 1.0 (2019-09-23)
+    - Simplify the design: only single `Structured` class.
+
 - 0.2 (2019-05-14)
     - use cryptohash-sha1,
       types of structuralInfoSha1Digest and structuralInfoSha1Digest are changed.

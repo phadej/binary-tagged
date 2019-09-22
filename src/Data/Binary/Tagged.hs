@@ -1,731 +1,397 @@
-{-# LANGUAGE CPP                   #-}
-{-# LANGUAGE ConstraintKinds       #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DefaultSignatures     #-}
-{-# LANGUAGE DeriveDataTypeable    #-}
-{-# LANGUAGE DeriveFoldable        #-}
-{-# LANGUAGE DeriveFunctor         #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DeriveTraversable     #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE PolyKinds             #-}
-{-# LANGUAGE RankNTypes            #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
--- We need this for Interleave
-{-# LANGUAGE UndecidableInstances  #-}
------------------------------------------------------------------------------
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE DefaultSignatures   #-}
+{-# LANGUAGE DeriveGeneric       #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE PolyKinds           #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE TypeOperators       #-}
 -- |
--- Module      :  Data.Binary.Tagged
--- Copyright   :  (C) 2015 Oleg Grenrus
--- License     :  BSD3
--- Maintainer  :  Oleg Grenrus <oleg.grenrus@iki.fi>
 --
--- Structurally tag binary serialisation stream.
+-- Copyright: (c) 2019 Oleg Grenrus
+-- License: GPL-3.0-or-later
+--
+-- Structurally tag binary serialisaton stream.
+-- Useful when most 'Binary' instances are 'Generic' derived.
 --
 -- Say you have:
 --
--- > data Record = Record
--- >   { _recordFields :: HM.HashMap Text (Integer, ByteString)
--- >   , _recordEnabled :: Bool
--- >   }
--- >   deriving (Eq, Show, Generic)
--- >
--- > instance Binary Record
--- > instance HasStructuralInfo Record
--- > instance HasSemanticVersion Record
+-- @
+-- data Record = Record
+--   { _recordFields  :: HM.HashMap Text (Integer, ByteString)
+--   , _recordEnabled :: Bool
+--   }
+--   deriving (Eq, Show, Generic)
+--
+-- instance 'Binary' Record
+-- instance 'Structured' Record
+-- @
 --
 -- then you can serialise and deserialise @Record@ values with a structure tag by simply
 --
--- > encodeTaggedFile "cachefile" record
--- > decodeTaggedFile "cachefile" :: IO Record
+-- @
+-- 'structuredEncode' record :: 'LBS.ByteString'
+-- 'structuredDecode' lbs :: IO Record
+-- @
 --
 -- If structure of @Record@ changes in between, deserialisation will fail early.
-module Data.Binary.Tagged
-  (
-  -- * Data
-  BinaryTagged(..),
-  BinaryTagged',
-  binaryTag,
-  binaryTag',
-  binaryUntag,
-  binaryUntag',
-  StructuralInfo(..),
-  -- * Serialisation
-  taggedEncode,
-  taggedDecode,
-  taggedDecodeOrFail,
-  -- * IO functions for serialisation
-  taggedEncodeFile,
-  taggedDecodeFile,
-  taggedDecodeFileOrFail,
-  -- * Class
-  HasStructuralInfo(..),
-  HasSemanticVersion(..),
-  Version,
-  -- ** Type level calculations
-  Interleave,
-  SumUpTo,
-  Div2,
-  -- * Generic derivation
-  -- ** GHC
-  ghcStructuralInfo,
-  ghcNominalType,
-  ghcStructuralInfo1,
-  -- ** SOP
-  sopStructuralInfo,
-  sopNominalType,
-  sopStructuralInfo1,
-  -- ** SOP direct
-  sopStructuralInfoS,
-  sopNominalTypeS,
-  sopStructuralInfo1S,
-  -- * Hash
-  structuralInfoSha1Digest,
-  structuralInfoSha1ByteStringDigest,
-  ) where
+--
+module Data.Binary.Tagged (
+    -- * Encoding and decoding
+    -- | These functions operate like @binary@'s counterparts,
+    -- but the serialised version has a structure hash in front.
+    structuredEncode,
+    structuredDecode,
+    structuredDecodeOrFail,
+    -- * Structured class
+    Structured (structure),
+    genericStructure,
+    GStructured,
+    nominalStructure,
+    containerStructure,
+    containerStructure2,
+    -- * Structure type
+    Structure (..),
+    TypeName,
+    ConstructorName,
+    TypeVersion,
+    SopStructure,
+    structureHash,
+    typeVersion,
+    typeName,
+    ) where
 
-import           Control.Applicative
-import           Control.Monad
-import qualified Crypto.Hash.SHA1        as SHA1
-import           Data.Binary
-import           Data.Binary.Get         (ByteOffset)
-import           Data.ByteString         as BS
-import qualified Data.ByteString.Base16  as Base16
-import           Data.ByteString.Lazy    as LBS
-import           Data.Monoid             ((<>))
-import           Data.Typeable           (Typeable)
-import           Generics.SOP            as SOP
--- -- -- -- -- -- -- -- -- import           Generics.SOP.Constraint as SOP
-import           Generics.SOP.GGP        as SOP
+import Data.Int           (Int16, Int32, Int64, Int8)
+import Data.List.NonEmpty (NonEmpty)
+import Data.Proxy         (Proxy (..))
+import Data.Ratio         (Ratio)
+import Data.Tagged        (Tagged (..), untag)
+import Data.Typeable      (Typeable, typeRep)
+import Data.Void          (Void)
+import Data.Word          (Word, Word16, Word32, Word64, Word8)
+import Numeric.Natural    (Natural)
 
-#if !MIN_VERSION_base(4,8,0)
-import Data.Foldable    (Foldable)
-import Data.Traversable (Traversable)
-#endif
+import GHC.Generics
 
-import qualified GHC.Generics as GHC
-import           GHC.TypeLits
-
--- Instances
-import qualified Data.Array.IArray    as Array
-import qualified Data.Array.Unboxed   as Array
-import qualified Data.Fixed           as Fixed
-import qualified Data.HashMap.Lazy    as HML
-import qualified Data.HashSet         as HS
-import           Data.Int
-import qualified Data.IntMap          as IntMap
-import qualified Data.IntSet          as IntSet
-import qualified Data.List.NonEmpty   as NE
-import qualified Data.Map             as Map
-import qualified Data.Monoid          as Monoid
-import qualified Data.Ratio           as Ratio
-import qualified Data.Semigroup       as Semigroup
-import qualified Data.Sequence        as Seq
-import qualified Data.Set             as Set
-import qualified Data.Text            as T
-import qualified Data.Text.Lazy       as LT
-import qualified Data.Time            as Time
-import qualified Data.Vector          as V
-import qualified Data.Vector.Storable as S
-import qualified Data.Vector.Unboxed  as U
-import qualified Data.Version         as Version
-import qualified Numeric.Natural      as Natural
+import qualified Crypto.Hash.SHA1       as SHA1
+import qualified Data.Binary            as Binary
+import qualified Data.Binary.Get        as Binary
+import qualified Data.Binary.Put        as Binary
+import qualified Data.ByteString        as BS
+import qualified Data.ByteString.Base16 as Base16
+import qualified Data.ByteString.Lazy   as LBS
+import qualified Data.HashMap.Strict    as HM
+import qualified Data.HashSet           as HS
+import qualified Data.IntMap            as IM
+import qualified Data.IntSet            as IS
+import qualified Data.Map               as Map
+import qualified Data.Monoid            as Mon
+import qualified Data.Scientific        as Sci
+import qualified Data.Semigroup         as Semi
+import qualified Data.Sequence          as Seq
+import qualified Data.Set               as Set
+import qualified Data.Text              as T
+import qualified Data.Text.Lazy         as LT
+import qualified Data.Time.Compat       as Time
+import qualified Data.Vector            as V
+import qualified Data.Vector.Storable   as SV
+import qualified Data.Vector.Unboxed    as UV
 
 #ifdef MIN_VERSION_aeson
 import qualified Data.Aeson as Aeson
 #endif
 
--- | 'Binary' serialisable class, which tries to be less error-prone to data structure changes.
+#if __GLASGOW_HASKELL__ >= 800
+import Data.Kind (Type)
+#else
+#define Type *
+#endif
+
+-------------------------------------------------------------------------------
+-- Types
+-------------------------------------------------------------------------------
+
+type TypeName        = String
+type ConstructorName = String
+
+-- | A sematic version of a data type. Usually 0.
+type TypeVersion     = Word32
+
+-- | Structure of a datatype
+data Structure
+    = Nominal   !TypeVersion TypeName [Structure]  -- ^ nominal, yet can be parametrised by other structures.
+    | Newtype   !TypeVersion TypeName Structure    -- ^ a newtype wrapper
+    | Structure !TypeVersion TypeName SopStructure -- ^ sum-of-products structure
+  deriving (Eq, Ord, Show, Generic)
+
+instance Binary.Binary Structure
+instance Structured Structure
+
+type SopStructure = [(ConstructorName, [Structure])]
+
+-- | A hash digest of 'Structure'. A 20 bytes strict 'BS.ByteString'.
+structureHash :: Structure -> BS.ByteString
+structureHash = SHA1.hashlazy . Binary.encode
+
+-- | A van-Laarhoven lens into 'TypeVersion' of 'Structure'
 --
--- Values are serialised with header consisting of version @v@ and hash of 'structuralInfo'.
-newtype BinaryTagged (v :: k) a = BinaryTagged { unBinaryTagged :: a }
-  deriving (Eq, Ord, Show, Read, Functor, Foldable, Traversable, GHC.Generic, GHC.Generic1, Typeable)
--- TODO: Derive Enum, Bounded, Typeable, Data, Hashable, NFData, Numeric classes?
+-- @
+-- 'typeVersion' :: Lens' 'Structure' 'TypeVersion'
+-- @
+typeVersion :: Functor f => (TypeVersion -> f TypeVersion) -> Structure -> f Structure
+typeVersion f (Nominal v n s)   = fmap (\v' -> Nominal v' n s) (f v)
+typeVersion f (Newtype v n s)   = fmap (\v' -> Newtype v' n s) (f v)
+typeVersion f (Structure v n s) = fmap (\v' -> Structure v' n s) (f v)
 
-type BinaryTagged' a = BinaryTagged (SemanticVersion a) a
-
-binaryTag :: Proxy v -> a -> BinaryTagged v a
-binaryTag _ = BinaryTagged
-
-binaryTag' :: HasSemanticVersion a => a -> BinaryTagged' a
-binaryTag' = BinaryTagged
-
-binaryUntag :: Proxy v -> BinaryTagged v a -> a
-binaryUntag _ = unBinaryTagged
-
-binaryUntag' :: HasSemanticVersion a => BinaryTagged' a -> a
-binaryUntag' = unBinaryTagged
-
--- | Tagged version of 'encode'
-taggedEncode ::  forall a. (HasStructuralInfo a, HasSemanticVersion a, Binary a) => a -> LBS.ByteString
-taggedEncode = encode . binaryTag (Proxy :: Proxy (SemanticVersion a))
-
--- | Tagged version of 'decode'
-taggedDecode :: forall a. (HasStructuralInfo a, HasSemanticVersion a, Binary a) => LBS.ByteString -> a
-taggedDecode = binaryUntag (Proxy :: Proxy (SemanticVersion a)) . decode
-
--- | Tagged version of 'decodeOrFail'
-taggedDecodeOrFail :: forall a. (HasStructuralInfo a, HasSemanticVersion a, Binary a)
-                   => LBS.ByteString
-                   -> Either (LBS.ByteString, ByteOffset, String) (LBS.ByteString, ByteOffset, a)
-taggedDecodeOrFail = fmap3 (binaryUntag (Proxy :: Proxy (SemanticVersion a))) . decodeOrFail
-  where fmap3 f = fmap (\(a, b, c) -> (a, b, f c))
-
--- | Tagged version of 'encodeFile'
-taggedEncodeFile :: forall a. (HasStructuralInfo a, HasSemanticVersion a, Binary a) => FilePath -> a -> IO ()
-taggedEncodeFile filepath = encodeFile filepath . binaryTag (Proxy :: Proxy (SemanticVersion a))
-
--- | Tagged version of 'decodeFile'
-taggedDecodeFile :: forall a. (HasStructuralInfo a, HasSemanticVersion a, Binary a) => FilePath -> IO a
-taggedDecodeFile = fmap (binaryUntag (Proxy :: Proxy (SemanticVersion a))) . decodeFile
-
--- | Tagged version of 'decodeFileOrFail'
-taggedDecodeFileOrFail :: forall a. (HasStructuralInfo a, HasSemanticVersion a, Binary a) => FilePath -> IO (Either (ByteOffset, String) a)
-taggedDecodeFileOrFail = (fmap . fmap) (binaryUntag (Proxy :: Proxy (SemanticVersion a))) . decodeFileOrFail
-
-instance Applicative (BinaryTagged v) where
-  pure = return
-  (<*>) = ap
-
-instance Monad (BinaryTagged v) where
-  return = BinaryTagged
-  BinaryTagged m >>= k = k m
-
-instance Semigroup.Semigroup a => Semigroup.Semigroup (BinaryTagged v a) where
-  (<>) = liftA2 (Semigroup.<>)
-
-instance Monoid.Monoid a => Monoid.Monoid (BinaryTagged v a) where
-  mempty   = pure Monoid.mempty
-  mappend  = liftA2 Monoid.mappend
-
--- | Type the semantic version is serialised with.
-type Version = Word32
-
--- | Version and structure hash are prepended to serialised stream
-instance (Binary a, HasStructuralInfo a, KnownNat v) => Binary (BinaryTagged v a) where
-  put (BinaryTagged x) = put ver' >> put hash' >> put x
-    where
-      proxyV = Proxy :: Proxy v
-      proxyA = Proxy :: Proxy a
-      ver' = fromIntegral (natVal proxyV) :: Version
-      hash' = structuralInfoSha1ByteStringDigest . structuralInfo $ proxyA
-
-  get = do
-      ver <- get
-      if ver == ver'
-         then do hash <- get
-                 if hash == hash'
-                    then fmap BinaryTagged get
-                    else fail $ "Non matching structure hashes: got" <> show (Base16.encode hash) <> "; expected: " <> show (Base16.encode hash')
-         else fail $ "Non matching versions: got " <> show ver <> "; expected: " <> show ver'
-    where
-      proxyV = Proxy :: Proxy v
-      proxyA = Proxy :: Proxy a
-      ver' = fromIntegral (natVal proxyV) :: Version
-      hash' = structuralInfoSha1Digest . structuralInfo $ proxyA
-
--- | Data type structure, with (some) nominal information.
-data StructuralInfo = NominalType String
-                | NominalNewtype String StructuralInfo
-                | StructuralInfo String [[StructuralInfo]]
-  deriving (Eq, Ord, Show, GHC.Generic, Typeable)
-
-instance Binary StructuralInfo
-
--- | Type class providing `StructuralInfo` for each data type.
+-- | A van-Laarhoven lens into 'TypeName' of 'Structure'
 --
--- For regular non-recursive ADTs 'HasStructuralInfo' can be derived generically.
+-- @
+-- 'typeName' :: Lens' 'Structure' 'TypeName'
+-- @
+typeName :: Functor f => (TypeName -> f TypeName) -> Structure -> f Structure
+typeName f (Nominal v n s)   = fmap (\n' -> Nominal v n' s) (f n)
+typeName f (Newtype v n s)   = fmap (\n' -> Newtype v n' s) (f n)
+typeName f (Structure v n s) = fmap (\n' -> Structure v n' s) (f n)
+
+-------------------------------------------------------------------------------
+-- Classes
+-------------------------------------------------------------------------------
+
+-- | Class of types with a known 'Structure'.
 --
--- > data Record = Record { a :: Int, b :: Bool, c :: [Char] } deriving (Generic)
--- > instance hasStructuralInfo Record
+-- For regular non-recursive data types 'Structured' can be derived generically.
 --
--- For stable types, you can provide only type name
+-- @
+-- data Record = Record { a :: Int, b :: Bool, c :: [Char] } deriving ('Generic')
+-- instance 'Structured' Record
+-- @
 --
--- > instance HasStructuralInfo Int where structuralInfo = ghcNominalType -- infer name from Generic information
--- > instance HasStructuralInfo Integer where structuralInfo _ = NominalType "Integer"
+-- For other types check 'nominalStructure', 'containerStructure' etc.
 --
--- Recursive type story is a bit sad atm. If the type structure is stable, you can do:
---
--- > instance HasStructuralInfo a => HasStructuralInfo [a] where structuralInfo = ghcStructuralInfo1
-class HasStructuralInfo a where
-  structuralInfo :: Proxy a -> StructuralInfo
+class Structured a where
+    structure :: Proxy a -> Structure
+    default structure :: (Generic a, GStructured (Rep a)) => Proxy a -> Structure
+    structure = genericStructure
 
-  default structuralInfo :: ( GHC.Generic a
-                            , All2 HasStructuralInfo (GCode a)
-                            , GDatatypeInfo a
-                            , SListI2 (GCode a)
-                            ) => Proxy a -> StructuralInfo
-  structuralInfo = ghcStructuralInfo
-
--- | A helper type family for 'encodeTaggedFile' and 'decodeTaggedFile'.
---
--- The default definition is @'SemanticVersion' a = 0@
-class KnownNat (SemanticVersion a) => HasSemanticVersion (a :: *) where
-  type SemanticVersion a :: Nat
-  type SemanticVersion a = 0
-
-instance HasStructuralInfo StructuralInfo
-instance HasSemanticVersion StructuralInfo
-
-structuralInfoSha1Digest :: StructuralInfo -> BS.ByteString
-structuralInfoSha1Digest = SHA1.hashlazy . encode
-
-{-# DEPRECATED structuralInfoSha1ByteStringDigest "Use structuralInfoSha1Digest directly" #-}
-structuralInfoSha1ByteStringDigest :: StructuralInfo -> BS.ByteString
-structuralInfoSha1ByteStringDigest = structuralInfoSha1Digest
+    -- This member is hidden. It's there to precalc
+    structureHash' :: Tagged a BS.ByteString
+    structureHash' = Tagged (structureHash (structure (Proxy :: Proxy a)))
 
 -------------------------------------------------------------------------------
--- Generics
+-- Functions
 -------------------------------------------------------------------------------
 
-ghcStructuralInfo :: ( GHC.Generic a
-                     , All2 HasStructuralInfo (GCode a)
-                     , GDatatypeInfo a
-                     , SListI2 (GCode a)
-                     )
-                  => Proxy a
-                  -> StructuralInfo
-ghcStructuralInfo proxy = sopStructuralInfoS (gdatatypeInfo proxy)
+-- | Structured 'Binary.encode'.
+-- Encode a value to using binary serialisation to a lazy 'LBS.ByteString'.
+-- Encoding starts with 20 byte large structure hash.
+structuredEncode
+  :: forall a. (Binary.Binary a, Structured a)
+  => a -> LBS.ByteString
+structuredEncode x = Binary.encode (Tag :: Tag a, x)
 
-ghcNominalType ::  (GHC.Generic a,  GDatatypeInfo a) => Proxy a -> StructuralInfo
-ghcNominalType proxy = sopNominalTypeS (gdatatypeInfo proxy)
+-- | Structured 'Binary.decode'.
+-- Decode a value from a lazy 'LBS.ByteString', reconstructing the original structure.
+-- Throws pure exception on invalid inputs.
+structuredDecode
+  :: forall a. (Binary.Binary a, Structured a)
+  => LBS.ByteString -> a
+structuredDecode lbs = snd (Binary.decode lbs :: (Tag a, a))
 
-ghcStructuralInfo1 :: forall f a. (GHC.Generic1 f, GDatatypeInfo (f a), HasStructuralInfo a) => Proxy (f a) -> StructuralInfo
-ghcStructuralInfo1 proxy = sopStructuralInfo1S (structuralInfo (Proxy :: Proxy a)) (gdatatypeInfo proxy)
+-- | Structured 'Binary.decodeOrFail'.
+structuredDecodeOrFail
+  :: forall a. (Binary.Binary a, Structured a)
+  => LBS.ByteString
+  -> Either (LBS.ByteString, Binary.ByteOffset, String) (LBS.ByteString, Binary.ByteOffset, a)
+structuredDecodeOrFail lbs = case Binary.decodeOrFail lbs of
+    Left err                          -> Left err
+    Right (bs, bo, (Tag :: Tag a, x)) -> Right (bs, bo, x)
 
--- SOP derivation
+data Tag a = Tag
 
-sopStructuralInfo :: forall a. (Generic a, HasDatatypeInfo a, All2 HasStructuralInfo (Code a)) => Proxy a -> StructuralInfo
-sopStructuralInfo proxy = sopStructuralInfoS (datatypeInfo proxy)
+instance Structured a => Binary.Binary (Tag a) where
+    get = do
+        actual <- Binary.getByteString 20
+        if actual == expected
+        then return Tag
+        else fail $ concat
+            [ "Non-matching structured hashes: "
+            , show (Base16.encode actual)
+            , "; expected: "
+            , show (Base16.encode expected)
+            ]
+      where
+        expected = untag (structureHash' :: Tagged a BS.ByteString)
 
-sopStructuralInfoS :: forall xss. ( All2 HasStructuralInfo xss
-                                  , SListI2 xss
-                                  )
-                   => DatatypeInfo xss
-                   -> StructuralInfo
-sopStructuralInfoS di@(Newtype _ _ ci)  = NominalNewtype (datatypeName di) (sopNominalNewtype ci)
-sopStructuralInfoS di@ADT {}            = StructuralInfo (datatypeName di) (sopNominalAdtPOP (hpure Proxy :: POP Proxy xss))
-
-sopNominalNewtype :: forall x. HasStructuralInfo x => ConstructorInfo '[x] -> StructuralInfo
-sopNominalNewtype _ = structuralInfo (Proxy :: Proxy x)
-
-sopNominalAdtPOP :: (All2 HasStructuralInfo xss) => POP Proxy xss -> [[StructuralInfo]]
-sopNominalAdtPOP (POP np2) = sopNominalAdt np2
-
-sopNominalAdt :: (All2 HasStructuralInfo xss) => NP (NP Proxy) xss -> [[StructuralInfo]]
-sopNominalAdt Nil       = []
-sopNominalAdt (p :* ps) = sopStructuralInfoP p : sopNominalAdt ps
-
-sopStructuralInfoP :: (All HasStructuralInfo xs) => NP Proxy xs -> [StructuralInfo]
-sopStructuralInfoP Nil = []
-sopStructuralInfoP (proxy :* rest) =  structuralInfo proxy : sopStructuralInfoP rest
-
-sopNominalType :: forall a. (Generic a, HasDatatypeInfo a) => Proxy a -> StructuralInfo
-sopNominalType proxy = sopNominalTypeS (datatypeInfo proxy)
-
-sopNominalTypeS :: DatatypeInfo xss -> StructuralInfo
-sopNominalTypeS di = NominalType (datatypeName di)
-
-sopStructuralInfo1 :: forall f a. (Generic (f a), HasDatatypeInfo (f a), HasStructuralInfo a) => Proxy (f a) -> StructuralInfo
-sopStructuralInfo1 proxy = sopStructuralInfo1S (structuralInfo (Proxy :: Proxy a)) (datatypeInfo proxy)
-
-sopStructuralInfo1S :: StructuralInfo -> DatatypeInfo xss -> StructuralInfo
-sopStructuralInfo1S nsop di = NominalNewtype (datatypeName di) nsop
+    put _ = Binary.putByteString expected
+      where
+        expected = untag (structureHash' :: Tagged a BS.ByteString)
 
 -------------------------------------------------------------------------------
--- SOP helpers
+-- Smart constructors
 -------------------------------------------------------------------------------
 
--- | Interleaving
---
--- > 3 | 9  .  .  .  .
--- > 2 | 5  8  .  .  .
--- > 1 | 2  4  7 11  .
--- > 0 | 0  1  3  6 10
--- > -----------------
--- >     0  1  2  3  4
---
--- This can be calculated by @f x y = sum ([0..x+y]) + y@
-type Interleave (n :: Nat) (m :: Nat) = SumUpTo (n + m) + m
-type SumUpTo (n :: Nat) = Div2 (n GHC.TypeLits.* (n + 1))
-type family Div2 (n :: Nat) :: Nat where
-  Div2 0 = 0
-  Div2 1 = 0
-  Div2 n = 1 + Div2 (n - 2)
+-- | Use 'Typeable' to infer name
+nominalStructure :: Typeable a => Proxy a -> Structure
+nominalStructure p = Nominal 0 (show (typeRep p)) []
+
+containerStructure :: forall f a. (Typeable f, Structured a) => Proxy (f a) -> Structure
+containerStructure _ = Nominal 0 (show (typeRep (Proxy :: Proxy f)))
+    [ structure (Proxy :: Proxy a)
+    ]
+
+containerStructure2 :: forall f a b. (Typeable f, Structured a, Structured b) => Proxy (f a b) -> Structure
+containerStructure2 _ = Nominal 0 (show (typeRep (Proxy :: Proxy f)))
+    [ structure (Proxy :: Proxy a)
+    , structure (Proxy :: Proxy b)
+    ]
 
 -------------------------------------------------------------------------------
--- Instances
+-- Generic
 -------------------------------------------------------------------------------
 
-instance HasStructuralInfo Bool where structuralInfo = ghcNominalType
-instance HasStructuralInfo Char where structuralInfo _ = NominalType "Char"
-instance HasStructuralInfo Int where structuralInfo _ = NominalType "Int"
-instance HasStructuralInfo Word where structuralInfo _ = NominalType "Word"
-instance HasStructuralInfo Integer where structuralInfo _ = NominalType "Integer"
+-- | Derive 'structure' genrically.
+genericStructure :: forall a. (Generic a, GStructured (Rep a)) => Proxy a -> Structure
+genericStructure _ = gstructured (Proxy :: Proxy (Rep a)) 0
 
-instance HasStructuralInfo Int8 where structuralInfo _ = NominalType "Int8"
-instance HasStructuralInfo Int16 where structuralInfo _ = NominalType "Int16"
-instance HasStructuralInfo Int32 where structuralInfo _ = NominalType "Int32"
-instance HasStructuralInfo Int64 where structuralInfo _ = NominalType "Int64"
+-- | Used to implement 'genericStructure'.
+class GStructured (f :: Type -> Type) where
+    gstructured :: Proxy f -> TypeVersion -> Structure
 
-instance HasStructuralInfo Word8 where structuralInfo _ = NominalType "Word8"
-instance HasStructuralInfo Word16 where structuralInfo _ = NominalType "Word16"
-instance HasStructuralInfo Word32 where structuralInfo _ = NominalType "Word32"
-instance HasStructuralInfo Word64 where structuralInfo _ = NominalType "Word64"
+instance (i ~ D, Datatype c, GStructuredSum f) => GStructured (M1 i c f) where
+    gstructured _ v = case sop of
+        [(_, [s])] | isNewtype p -> Newtype v name s
+        _                        -> Structure v name sop
+      where
+        p    = undefined :: M1 i c f ()
+        name = datatypeName p
+        sop  = gstructuredSum (Proxy :: Proxy f) []
 
-instance HasSemanticVersion Bool
-instance HasSemanticVersion Char
-instance HasSemanticVersion Int
-instance HasSemanticVersion Word
-instance HasSemanticVersion Integer
+class GStructuredSum (f :: Type -> Type) where
+    gstructuredSum :: Proxy f -> SopStructure -> SopStructure
 
-instance HasSemanticVersion Int8
-instance HasSemanticVersion Int16
-instance HasSemanticVersion Int32
-instance HasSemanticVersion Int64
+instance (i ~ C, Constructor c, GStructuredProd f) => GStructuredSum (M1 i c f) where
+    gstructuredSum _ xs = (name, prod) : xs
+      where
+        name = conName (undefined :: M1 i c f ())
+        prod = gstructuredProd (Proxy :: Proxy f) []
 
-instance HasSemanticVersion Word8
-instance HasSemanticVersion Word16
-instance HasSemanticVersion Word32
-instance HasSemanticVersion Word64
+instance (GStructuredSum f, GStructuredSum g) => GStructuredSum (f :+: g) where
+    gstructuredSum _ xs
+        = gstructuredSum (Proxy :: Proxy f)
+        $ gstructuredSum (Proxy :: Proxy g) xs
 
--- | /Since binary-tagged-0.1.3.0/
-instance HasStructuralInfo Ordering where structuralInfo = ghcNominalType
+instance GStructuredSum V1 where
+    gstructuredSum _ = id
 
--- | /Since binary-tagged-0.1.3.0/
-instance HasSemanticVersion Ordering
+class GStructuredProd (f :: Type -> Type) where
+    gstructuredProd :: Proxy f -> [Structure] -> [Structure]
 
--- | /Since binary-tagged-0.1.3.0/
-instance HasStructuralInfo Float where structuralInfo _ = NominalType "Float"
+instance (i ~ s, GStructuredProd f) => GStructuredProd (M1 i c f) where
+    gstructuredProd _ = gstructuredProd (Proxy :: Proxy f)
 
--- | /Since binary-tagged-0.1.3.0/
-instance HasStructuralInfo Double where structuralInfo _ = NominalType "Double"
+instance Structured c => GStructuredProd (K1 i c) where
+    gstructuredProd _ xs = structure (Proxy :: Proxy c) : xs
 
--- | /Since binary-tagged-0.1.3.0/
-instance HasSemanticVersion Float
+instance GStructuredProd U1 where
+    gstructuredProd _ = id
 
--- | /Since binary-tagged-0.1.3.0/
-instance HasSemanticVersion Double
-
--------------------------------------------------------------------------------
--- Recursive types: List, NonEmpty
--------------------------------------------------------------------------------
-
-instance HasStructuralInfo a => HasStructuralInfo [a] where structuralInfo = ghcStructuralInfo1
-instance HasSemanticVersion a => HasSemanticVersion [a] where
-  type SemanticVersion [a] = SemanticVersion a
-
-instance HasStructuralInfo a => HasStructuralInfo (NE.NonEmpty a) where structuralInfo = ghcStructuralInfo1
-instance HasSemanticVersion a => HasSemanticVersion (NE.NonEmpty a) where
-  type SemanticVersion (NE.NonEmpty a) = SemanticVersion a
+instance (GStructuredProd f, GStructuredProd g) => GStructuredProd (f :*: g) where
+    gstructuredProd _ xs
+        = gstructuredProd (Proxy :: Proxy f)
+        $ gstructuredProd (Proxy :: Proxy g) xs
 
 -------------------------------------------------------------------------------
--- Basic types
+-- instances
 -------------------------------------------------------------------------------
 
-instance HasStructuralInfo a => HasStructuralInfo (Maybe a)
-instance HasSemanticVersion a => HasSemanticVersion (Maybe a) where
-  type SemanticVersion (Maybe a) = SemanticVersion a
+instance Structured Void
+instance Structured ()
+instance Structured Bool
+instance Structured Ordering
 
-instance HasStructuralInfo a => HasStructuralInfo (Ratio.Ratio a) where
-  structuralInfo _ = NominalNewtype "Ratio" $ structuralInfo (Proxy :: Proxy a)
-instance HasSemanticVersion a => HasSemanticVersion (Ratio.Ratio a) where
-  type SemanticVersion (Ratio.Ratio a) = SemanticVersion a
+instance Structured Char    where structure = nominalStructure
+instance Structured Int     where structure = nominalStructure
+instance Structured Integer where structure = nominalStructure
+instance Structured Natural where structure = nominalStructure
 
-instance (HasStructuralInfo a, HasStructuralInfo b) => HasStructuralInfo (Either a b)
-instance (HasSemanticVersion a, HasSemanticVersion b, KnownNat (SemanticVersion (Either a b))) => HasSemanticVersion (Either a b) where
-  type SemanticVersion (Either a b) = Interleave (SemanticVersion a) (SemanticVersion b)
+instance Structured Data.Word.Word where structure = nominalStructure
 
--------------------------------------------------------------------------------
--- tuples
--------------------------------------------------------------------------------
+instance Structured Int8  where structure = nominalStructure
+instance Structured Int16 where structure = nominalStructure
+instance Structured Int32 where structure = nominalStructure
+instance Structured Int64 where structure = nominalStructure
 
-instance (HasStructuralInfo a, HasStructuralInfo b) => HasStructuralInfo (a, b)
-instance (HasStructuralInfo a, HasStructuralInfo b, HasStructuralInfo c) => HasStructuralInfo (a, b, c)
-instance (HasStructuralInfo a, HasStructuralInfo b, HasStructuralInfo c, HasStructuralInfo d) => HasStructuralInfo (a, b, c, d)
+instance Structured Word8  where structure = nominalStructure
+instance Structured Word16 where structure = nominalStructure
+instance Structured Word32 where structure = nominalStructure
+instance Structured Word64 where structure = nominalStructure
 
-instance (HasSemanticVersion a
-         ,HasSemanticVersion b
-         ,KnownNat (SemanticVersion (a, b))) => HasSemanticVersion (a, b) where
-  type SemanticVersion (a, b) = Interleave (SemanticVersion a) (SemanticVersion b)
+instance Structured Float  where structure = nominalStructure
+instance Structured Double where structure = nominalStructure
 
--- | /Since binary-tagged-0.1.3.0/
-instance (HasSemanticVersion a
-         ,HasSemanticVersion b
-         ,HasSemanticVersion c
-         ,KnownNat (SemanticVersion (a, b, c))) => HasSemanticVersion (a, b, c) where
-  type SemanticVersion (a, b, c) = Interleave (SemanticVersion a) (SemanticVersion (b, c))
+instance Structured a => Structured (Maybe a)
+instance (Structured a, Structured b) => Structured (Either a b)
+instance Structured a => Structured (Ratio a) where structure = containerStructure
+instance Structured a => Structured [a] where structure = containerStructure
+instance Structured a => Structured (NonEmpty a) where structure = containerStructure
 
--- | /Since binary-tagged-0.1.3.0/
-instance (HasSemanticVersion a
-         ,HasSemanticVersion b
-         ,HasSemanticVersion c
-         ,HasSemanticVersion d
-         ,KnownNat (SemanticVersion (a, b, c, d))) => HasSemanticVersion (a, b, c, d) where
-  type SemanticVersion (a, b, c, d) = Interleave (SemanticVersion a) (SemanticVersion (b, c, d))
+instance Structured a => Structured (Mon.Sum a)
+instance Structured a => Structured (Mon.Product a)
+instance Structured a => Structured (Mon.Dual a)
+instance Structured a => Structured (Mon.First a)
+instance Structured a => Structured (Mon.Last a)
+instance Structured Mon.All
+instance Structured Mon.Any
 
--------------------------------------------------------------------------------
--- Unit
--------------------------------------------------------------------------------
+instance Structured a => Structured (Semi.Min a)
+instance Structured a => Structured (Semi.Max a)
+instance Structured a => Structured (Semi.First a)
+instance Structured a => Structured (Semi.Last a)
+instance Structured a => Structured (Semi.WrappedMonoid a)
+instance Structured a => Structured (Semi.Option a)
 
--- | /Since binary-tagged-0.1.3.0/
-instance HasStructuralInfo () where structuralInfo _ = NominalType "()"
+instance (Structured a1, Structured a2) => Structured (a1, a2)
+instance (Structured a1, Structured a2, Structured a3) => Structured (a1, a2, a3)
+instance (Structured a1, Structured a2, Structured a3, Structured a4) => Structured (a1, a2, a3, a4)
+instance (Structured a1, Structured a2, Structured a3, Structured a4, Structured a5) => Structured (a1, a2, a3, a4, a5)
+instance (Structured a1, Structured a2, Structured a3, Structured a4, Structured a5, Structured a6) => Structured (a1, a2, a3, a4, a5, a6)
+instance (Structured a1, Structured a2, Structured a3, Structured a4, Structured a5, Structured a6, Structured a7) => Structured (a1, a2, a3, a4, a5, a6, a7)
 
--- | /Since binary-tagged-0.1.3.0/
-instance HasSemanticVersion ()
+-- TODO: Fixed instance
 
--------------------------------------------------------------------------------
--- Data.Fixed
--------------------------------------------------------------------------------
+instance Structured BS.ByteString where structure = nominalStructure
+instance Structured LBS.ByteString where structure = nominalStructure
 
--- | /Since binary-tagged-0.1.3.0/
-instance HasStructuralInfo a => HasStructuralInfo (Fixed.Fixed a) where
-  structuralInfo _ = StructuralInfo "Fixed" [[ structuralInfo (Proxy :: Proxy a) ]]
+instance Structured T.Text where structure = nominalStructure
+instance Structured LT.Text where structure = nominalStructure
 
-instance HasStructuralInfo Fixed.E0 where structuralInfo _ = NominalType "E0"
-instance HasStructuralInfo Fixed.E1 where structuralInfo _ = NominalType "E1"
-instance HasStructuralInfo Fixed.E2 where structuralInfo _ = NominalType "E2"
-instance HasStructuralInfo Fixed.E3 where structuralInfo _ = NominalType "E3"
-instance HasStructuralInfo Fixed.E6 where structuralInfo _ = NominalType "E6"
-instance HasStructuralInfo Fixed.E9 where structuralInfo _ = NominalType "E9"
-instance HasStructuralInfo Fixed.E12 where structuralInfo _ = NominalType "E12"
+instance (Structured k, Structured v) => Structured (Map.Map k v) where structure = containerStructure2
+instance (Structured k) => Structured (Set.Set k) where structure = containerStructure
+instance (Structured v) => Structured (IM.IntMap v) where structure = containerStructure
+instance Structured IS.IntSet where structure = nominalStructure
+instance (Structured v) => Structured (Seq.Seq v) where structure = containerStructure
 
--- | /Since binary-tagged-0.1.3.0/
-instance HasSemanticVersion (Fixed.Fixed a)
+instance (Structured k, Structured v) => Structured (HM.HashMap k v) where structure = containerStructure2
+instance (Structured k) => Structured (HS.HashSet k) where structure = containerStructure
 
--------------------------------------------------------------------------------
--- Data.Version
--------------------------------------------------------------------------------
+instance Structured a => Structured (V.Vector a)  where structure = containerStructure
+instance Structured a => Structured (UV.Vector a) where structure = containerStructure
+instance Structured a => Structured (SV.Vector a) where structure = containerStructure
 
--- | /Since binary-tagged-0.1.3.0/
-instance HasStructuralInfo Version.Version where
-  structuralInfo _ = StructuralInfo "Version" [[ structuralInfo (Proxy :: Proxy [Int])
-                                               , structuralInfo (Proxy :: Proxy [String])
-                                              ]]
--- Version has no Generic instance :(
-
--- | /Since binary-tagged-0.1.3.0/
-instance HasSemanticVersion Version.Version
-
--------------------------------------------------------------------------------
--- Data.Monoid
--------------------------------------------------------------------------------
-
-instance HasStructuralInfo a => HasStructuralInfo (Monoid.Sum a)
-instance HasSemanticVersion a => HasSemanticVersion (Monoid.Sum a) where
-  type SemanticVersion (Monoid.Sum a) = SemanticVersion a
-
-instance HasStructuralInfo a => HasStructuralInfo (Monoid.Product a)
-instance HasSemanticVersion a => HasSemanticVersion (Monoid.Product a) where
-  type SemanticVersion (Monoid.Product a) = SemanticVersion a
-
--- | /Since binary-tagged-0.1.4.0/
-instance HasStructuralInfo a => HasStructuralInfo (Monoid.Dual a)
--- | /Since binary-tagged-0.1.4.0/
-instance HasSemanticVersion a => HasSemanticVersion (Monoid.Dual a) where
-  type SemanticVersion (Monoid.Dual a) = SemanticVersion a
-
--- | /Since binary-tagged-0.1.4.0/
-instance HasStructuralInfo a => HasStructuralInfo (Monoid.First a)
--- | /Since binary-tagged-0.1.4.0/
-instance HasSemanticVersion a => HasSemanticVersion (Monoid.First a) where
-  type SemanticVersion (Monoid.First a) = SemanticVersion a
-
--- | /Since binary-tagged-0.1.4.0/
-instance HasStructuralInfo a => HasStructuralInfo (Monoid.Last a)
--- | /Since binary-tagged-0.1.4.0/
-instance HasSemanticVersion a => HasSemanticVersion (Monoid.Last a) where
-  type SemanticVersion (Monoid.Last a) = SemanticVersion a
-
--- | /Since binary-tagged-0.1.4.0/
-instance HasStructuralInfo Monoid.All
--- | /Since binary-tagged-0.1.4.0/
-instance  HasSemanticVersion Monoid.All
-
--- | /Since binary-tagged-0.1.4.0/
-instance HasStructuralInfo Monoid.Any
--- | /Since binary-tagged-0.1.4.0/
-instance  HasSemanticVersion Monoid.Any
-
--------------------------------------------------------------------------------
--- semigroups
--------------------------------------------------------------------------------
-
--- | /Since binary-tagged-0.1.4.0/
-instance HasStructuralInfo a => HasStructuralInfo (Semigroup.Min a)
--- | /Since binary-tagged-0.1.4.0/
-instance HasSemanticVersion a => HasSemanticVersion (Semigroup.Min a) where
-  type SemanticVersion (Semigroup.Min a) = SemanticVersion a
-
--- | /Since binary-tagged-0.1.4.0/
-instance HasStructuralInfo a => HasStructuralInfo (Semigroup.Max a)
--- | /Since binary-tagged-0.1.4.0/
-instance HasSemanticVersion a => HasSemanticVersion (Semigroup.Max a) where
-  type SemanticVersion (Semigroup.Max a) = SemanticVersion a
-
--- | /Since binary-tagged-0.1.4.0/
-instance HasStructuralInfo a => HasStructuralInfo (Semigroup.First a)
--- | /Since binary-tagged-0.1.4.0/
-instance HasSemanticVersion a => HasSemanticVersion (Semigroup.First a) where
-  type SemanticVersion (Semigroup.First a) = SemanticVersion a
-
--- | /Since binary-tagged-0.1.4.0/
-instance HasStructuralInfo a => HasStructuralInfo (Semigroup.Last a)
--- | /Since binary-tagged-0.1.4.0/
-instance HasSemanticVersion a => HasSemanticVersion (Semigroup.Last a) where
-  type SemanticVersion (Semigroup.Last a) = SemanticVersion a
-
--- | /Since binary-tagged-0.1.4.0/
-instance HasStructuralInfo a => HasStructuralInfo (Semigroup.WrappedMonoid a)
--- | /Since binary-tagged-0.1.4.0/
-instance HasSemanticVersion a => HasSemanticVersion (Semigroup.WrappedMonoid a) where
-  type SemanticVersion (Semigroup.WrappedMonoid a) = SemanticVersion a
-
--- | /Since binary-tagged-0.1.4.0/
-instance HasStructuralInfo a => HasStructuralInfo (Semigroup.Option a)
--- | /Since binary-tagged-0.1.4.0/
-instance HasSemanticVersion a => HasSemanticVersion (Semigroup.Option a) where
-  type SemanticVersion (Semigroup.Option a) = SemanticVersion a
-
--------------------------------------------------------------------------------
--- bytestring
--------------------------------------------------------------------------------
-
-instance HasStructuralInfo BS.ByteString where structuralInfo _ = NominalType "ByteString.Strict"
-instance HasStructuralInfo LBS.ByteString where structuralInfo _ = NominalType "ByteString.Lazy"
-
-instance HasSemanticVersion BS.ByteString
-instance HasSemanticVersion LBS.ByteString
-
--------------------------------------------------------------------------------
--- nats
--------------------------------------------------------------------------------
-
--- | /Since binary-tagged-0.1.4.0/
-instance HasStructuralInfo Natural.Natural where structuralInfo _ = NominalType "Numeric.Natural"
--- | /Since binary-tagged-0.1.4.0/
-instance HasSemanticVersion Natural.Natural
-
--------------------------------------------------------------------------------
--- text
--------------------------------------------------------------------------------
-
-instance HasStructuralInfo T.Text where structuralInfo _ = NominalType "Text.Strict"
-instance HasStructuralInfo LT.Text where structuralInfo _ = NominalType "Text.Lazy"
-
-instance HasSemanticVersion T.Text
-instance HasSemanticVersion LT.Text
-
--------------------------------------------------------------------------------
--- containers
--------------------------------------------------------------------------------
-
-instance HasStructuralInfo a => HasStructuralInfo (IntMap.IntMap a) where
-  structuralInfo _ = NominalNewtype "IntMap" $ structuralInfo (Proxy :: Proxy a)
-instance HasSemanticVersion a => HasSemanticVersion (IntMap.IntMap a) where
-  type SemanticVersion (IntMap.IntMap a) = SemanticVersion a
-
-instance HasStructuralInfo IntSet.IntSet where
-  structuralInfo _ = NominalType "IntSet"
-instance HasSemanticVersion IntSet.IntSet
-
-instance (HasStructuralInfo k, HasStructuralInfo v) => HasStructuralInfo (Map.Map k v) where
-  structuralInfo _ = StructuralInfo "Map" [[ structuralInfo (Proxy :: Proxy k), structuralInfo (Proxy :: Proxy v) ]]
-instance (HasSemanticVersion k, HasSemanticVersion v, KnownNat (SemanticVersion (Map.Map k v))) => HasSemanticVersion (Map.Map k v) where
-  type SemanticVersion (Map.Map k v) = Interleave (SemanticVersion k) (SemanticVersion v)
-
-instance HasStructuralInfo a => HasStructuralInfo (Seq.Seq a) where
-  structuralInfo _ = NominalNewtype "Seq" $ structuralInfo (Proxy :: Proxy a)
-instance HasSemanticVersion a => HasSemanticVersion (Seq.Seq a) where
-  type SemanticVersion (Seq.Seq a) = SemanticVersion a
-
-instance HasStructuralInfo a => HasStructuralInfo (Set.Set a) where
-  structuralInfo _ = NominalNewtype "Set" $ structuralInfo (Proxy :: Proxy a)
-instance HasSemanticVersion a => HasSemanticVersion (Set.Set a) where
-  type SemanticVersion (Set.Set a) = SemanticVersion a
-
--------------------------------------------------------------------------------
--- unordered-containers
--------------------------------------------------------------------------------
-
-instance (HasStructuralInfo k, HasStructuralInfo v) => HasStructuralInfo (HML.HashMap k v) where
-  structuralInfo _ = StructuralInfo "HashMap" [[ structuralInfo (Proxy :: Proxy k), structuralInfo (Proxy :: Proxy v) ]]
-instance (HasSemanticVersion k, HasSemanticVersion v, KnownNat (SemanticVersion (HML.HashMap k v))) => HasSemanticVersion (HML.HashMap k v) where
-  type SemanticVersion (HML.HashMap k v) = Interleave (SemanticVersion k) (SemanticVersion v)
-
-instance HasStructuralInfo a => HasStructuralInfo (HS.HashSet a) where
-  structuralInfo _ = NominalNewtype "HashSet" $ structuralInfo (Proxy :: Proxy a)
-instance HasSemanticVersion a => HasSemanticVersion (HS.HashSet a) where
-  type SemanticVersion (HS.HashSet a) = SemanticVersion a
-
--------------------------------------------------------------------------------
--- array
--------------------------------------------------------------------------------
-
-instance (HasStructuralInfo i, HasStructuralInfo e) => HasStructuralInfo (Array.Array i e) where
-  structuralInfo _ = StructuralInfo "Array" [[ structuralInfo (Proxy :: Proxy i), structuralInfo (Proxy :: Proxy e) ]]
-instance (HasSemanticVersion i, HasSemanticVersion e, KnownNat (SemanticVersion (Array.Array i e))) => HasSemanticVersion (Array.Array i e) where
-  type SemanticVersion (Array.Array i e) = Interleave (SemanticVersion i) (SemanticVersion e)
-
-instance (HasStructuralInfo i, HasStructuralInfo e) => HasStructuralInfo (Array.UArray i e) where
-  structuralInfo _ = StructuralInfo "UArray" [[ structuralInfo (Proxy :: Proxy i), structuralInfo (Proxy :: Proxy e) ]]
-instance (HasSemanticVersion i, HasSemanticVersion e, KnownNat (SemanticVersion (Array.UArray i e))) => HasSemanticVersion (Array.UArray i e) where
-  type SemanticVersion (Array.UArray i e) = Interleave (SemanticVersion i) (SemanticVersion e)
-
--------------------------------------------------------------------------------
--- vector
--------------------------------------------------------------------------------
-
-instance HasStructuralInfo a => HasStructuralInfo (V.Vector a) where
-  structuralInfo _ = NominalNewtype "Vector" $ structuralInfo (Proxy :: Proxy a)
-instance HasSemanticVersion a => HasSemanticVersion (V.Vector a) where
-  type SemanticVersion (V.Vector a) = SemanticVersion a
-
-instance HasStructuralInfo a => HasStructuralInfo (U.Vector a) where
-  structuralInfo _ = NominalNewtype "Vector.Unboxed" $ structuralInfo (Proxy :: Proxy a)
-instance HasSemanticVersion a => HasSemanticVersion (U.Vector a) where
-  type SemanticVersion (U.Vector a) = SemanticVersion a
-
-instance HasStructuralInfo a => HasStructuralInfo (S.Vector a) where
-  structuralInfo _ = NominalNewtype "Vector.Storable" $ structuralInfo (Proxy :: Proxy a)
-instance HasSemanticVersion a => HasSemanticVersion (S.Vector a) where
-  type SemanticVersion (S.Vector a) = SemanticVersion a
-
--------------------------------------------------------------------------------
--- time
--------------------------------------------------------------------------------
-
-instance HasStructuralInfo Time.UTCTime where structuralInfo _ = NominalType "UTCTime"
-instance HasStructuralInfo Time.DiffTime where structuralInfo _ = NominalType "DiffTime"
-instance HasStructuralInfo Time.UniversalTime where structuralInfo _ = NominalType "UniversalTime"
-instance HasStructuralInfo Time.NominalDiffTime where structuralInfo _ = NominalType "NominalDiffTime"
-instance HasStructuralInfo Time.Day where structuralInfo _ = NominalType "Day"
-instance HasStructuralInfo Time.TimeZone where structuralInfo _ = NominalType "TimeZone"
-instance HasStructuralInfo Time.TimeOfDay where structuralInfo _ = NominalType "TimeOfDay"
-instance HasStructuralInfo Time.LocalTime where structuralInfo _ = NominalType "LocalTime"
-
-instance HasSemanticVersion Time.UTCTime
-instance HasSemanticVersion Time.DiffTime
-instance HasSemanticVersion Time.UniversalTime
-instance HasSemanticVersion Time.NominalDiffTime
-instance HasSemanticVersion Time.Day
-instance HasSemanticVersion Time.TimeZone
-instance HasSemanticVersion Time.TimeOfDay
-instance HasSemanticVersion Time.LocalTime
-
--------------------------------------------------------------------------------
--- aeson
--------------------------------------------------------------------------------
+instance Structured Sci.Scientific where structure = nominalStructure
 
 #ifdef MIN_VERSION_aeson
-
--- TODO: derive sop
-instance HasStructuralInfo Aeson.Value where structuralInfo _ = NominalType "Aeson.Value"
-instance HasSemanticVersion Aeson.Value
+instance Structured Aeson.Value
 #endif
+
+instance Structured Time.UTCTime         where structure = nominalStructure
+instance Structured Time.DiffTime        where structure = nominalStructure
+instance Structured Time.UniversalTime   where structure = nominalStructure
+instance Structured Time.NominalDiffTime where structure = nominalStructure
+instance Structured Time.Day             where structure = nominalStructure
+instance Structured Time.TimeZone        where structure = nominalStructure
+instance Structured Time.TimeOfDay       where structure = nominalStructure
+instance Structured Time.LocalTime       where structure = nominalStructure
+
+instance Structured (Proxy a)
+instance Structured a => Structured (Tagged b a)

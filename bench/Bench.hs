@@ -19,7 +19,7 @@ data Field = Field
 
 instance Binary Field
 instance NFData Field
-instance HasStructuralInfo Field
+instance Structured Field
 
 data Record = Record
   { _recordFields :: HM.HashMap Text Field
@@ -29,8 +29,7 @@ data Record = Record
 
 instance Binary Record
 instance NFData Record
-instance HasStructuralInfo Record
-instance HasSemanticVersion Record
+instance Structured Record
 
 record :: Record
 record = Record fields enabled
@@ -43,16 +42,16 @@ encodedRecord :: LBS.ByteString
 encodedRecord = encode record
 
 taggedEncodedRecord :: LBS.ByteString
-taggedEncodedRecord = taggedEncode record
+taggedEncodedRecord = structuredEncode record
 
 main :: IO ()
 main = defaultMain
   [ bgroup "encode"
       [ bench "Binary" $ nf encode record
-      , bench "Tagged" $ nf taggedEncode record
+      , bench "Tagged" $ nf structuredEncode record
       ]
   , bgroup "decode"
       [ bench "Binary" $ nf (decode :: LBS.ByteString -> Record) encodedRecord
-      , bench "Tagged" $ nf (taggedDecode :: LBS.ByteString -> Record) taggedEncodedRecord
+      , bench "Tagged" $ nf (structuredDecode :: LBS.ByteString -> Record) taggedEncodedRecord
       ]
   ]

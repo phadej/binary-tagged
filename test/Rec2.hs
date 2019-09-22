@@ -19,8 +19,7 @@ data Rec = Rec (Product Int) (Sum Int)
   deriving (Eq, Show, Generic)
 
 instance Binary Rec
-instance HasStructuralInfo Rec
-instance HasSemanticVersion Rec
+instance Structured Rec
 
 instance Arbitrary Rec where
   arbitrary = Rec <$> arbitraryProduct <*> arbitrarySum

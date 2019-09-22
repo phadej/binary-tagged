@@ -1,10 +1,5 @@
 branches: master
 benchmarks: <8.8
 
-constraint-set generics-sop-0.3
-  ghc: >= 7.8 && <8.8
-  constraints: generics-sop ==0.3.*
-
-constraint-set generics-sop-0.4
-  ghc: >= 8.0 && <8.8
-  constraints: generics-sop ==0.4.*
+constraint-set no-aeson
+  constraints: binary-tagged -aeson

@@ -1,21 +1,27 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE PolyKinds           #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE KindSignatures             #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
 module Main (main) where
 
-import           Data.Bifunctor
-import           Data.Binary
-import           Data.Binary.Tagged
-import           Data.Either
-import           Data.Monoid
-import           Data.Proxy
-import           Test.Tasty
-import           Test.Tasty.HUnit       (testCase, (@?=))
-import           Test.Tasty.QuickCheck
+
+import Control.Lens          ((&), (.~))
+import Data.Bifunctor        (bimap)
+import Data.Binary           (Binary, decode, encode)
+import Data.Either           (isLeft)
+import Data.Monoid           (Product (..), Sum (..))
+import Data.Proxy            (Proxy (..))
+import GHC.TypeLits          (KnownNat, Nat, natVal)
+import Test.QuickCheck
+       (Arbitrary (..), Property, counterexample, property, (===))
+import Test.Tasty            (TestTree, defaultMain, testGroup)
+import Test.Tasty.HUnit      (testCase, (@?=))
+import Test.Tasty.QuickCheck (testProperty)
 
 import qualified Data.ByteString.Base16 as Base16
 import qualified Data.ByteString.Char8  as BS8
+
+import Data.Binary.Tagged
 
 import qualified Rec1
 import qualified Rec2
@@ -25,21 +31,18 @@ main = defaultMain $ testGroup "Tests"
   [ roundtrips
   , wrongRoundtrips
   , failedRoundtrips
-  , testProperty "Interleave" interleaveProp
   , testCase "An example hash" $ do
-    let hash = structuralInfoSha1Digest
-             $ structuralInfo (Proxy :: Proxy [Either (Maybe Char) (Sum Int)])
+    let hash = structureHash
+             $ structure (Proxy :: Proxy [Either (Maybe Char) (Sum Int)])
 
-    Base16.encode hash @?= BS8.pack "acff3d40f6f06f87b4da8d3d3eb5682251867cc5"
+    Base16.encode hash @?= BS8.pack "c116be43b77d6fe3e79dc76e235f9a46a109a395"
   ]
 
--- | We actually check that this compiles.
-interleaveProp :: Property
-interleaveProp = property $ once $ lhs === rhs
-  where lhs :: Proxy 7
-        lhs = Proxy
-        rhs :: Proxy (Interleave 2 1)
-        rhs = Proxy
+newtype BinaryTagged (v :: Nat) a = BinaryTagged a deriving (Eq, Show, Binary)
+
+instance (Structured a, KnownNat v) => Structured (BinaryTagged v a) where
+    structure _ = structure (Proxy :: Proxy a)
+        & typeVersion .~ fromInteger (natVal (Proxy :: Proxy v))
 
 instance Arbitrary a => Arbitrary (BinaryTagged v a) where
   arbitrary = fmap BinaryTagged arbitrary
@@ -100,6 +103,6 @@ trdOf3 (_, _, c) = c
 isLeftProperty :: (Show a, Show b) => Either a b -> Property
 isLeftProperty x = counterexample ("not isLeft: " <> show x) (isLeft x)
 
-failedRoundtrip :: forall a b. (Arbitrary a, Binary a, Binary b, Show b) => Proxy a -> Proxy b -> a -> Property
-failedRoundtrip _ _ x = let x' = bimap trdOf3 trdOf3 $ decodeOrFail (encode x) :: Either String b
+failedRoundtrip :: forall a b. (Arbitrary a, Binary a, Binary b, Structured a, Structured b, Show b) => Proxy a -> Proxy b -> a -> Property
+failedRoundtrip _ _ x = let x' = bimap trdOf3 trdOf3 $ structuredDecodeOrFail (structuredEncode x) :: Either String b
                         in isLeftProperty x'
