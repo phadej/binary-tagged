@@ -17,15 +17,15 @@ description:
   \  }
   \  deriving (Eq, Show, Generic)
   .
-  instance 'Binary' Record
+  instance @Binary@ Record
   instance 'Structured' Record
   @
   .
   then you can serialise and deserialise @Record@ values with a structure tag by simply
   .
   @
-  'structuredEncode' record :: 'LBS.ByteString'
-  'structuredDecode' lbs :: IO Record
+  'structuredEncode' record :: LBS.ByteString
+  'structuredDecode' lbs    :: IO Record
   @
   .
   If structure of @Record@ changes in between, deserialisation will fail early.

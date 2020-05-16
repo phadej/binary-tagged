@@ -10,24 +10,28 @@
 --
 -- Structurally tag binary serialisation stream.
 --
--- Say you have:
+-- Say you have a data type
 --
--- > data Record = Record
--- >   { _recordFields :: HM.HashMap Text (Integer, ByteString)
--- >   , _recordEnabled :: Bool
--- >   }
--- >   deriving (Eq, Show, Generic)
--- >
--- > instance Binary Record
--- > instance HasStructuralInfo Record
--- > instance HasSemanticVersion Record
+-- @
+-- data Record = Record
+--   { _recordFields  :: HM.HashMap Text (Integer, ByteString)
+--   , _recordEnabled :: Bool
+--   }
+--   deriving (Eq, Show, Generic)
+--
+-- instance 'Binary.Binary' Record
+-- instance 'Structured' Record
+-- @
 --
 -- then you can serialise and deserialise @Record@ values with a structure tag by simply
 --
--- > encodeTaggedFile "cachefile" record
--- > decodeTaggedFile "cachefile" :: IO Record
+-- @
+-- 'structuredEncode' record :: LBS.ByteString
+-- 'structuredDecode' lbs    :: Either String Record
+-- @
 --
 -- If structure of @Record@ changes in between, deserialisation will fail early.
+--
 module Data.Binary.Tagged (
     -- * Encoding and decoding
     -- | These functions operate like @binary@'s counterparts,

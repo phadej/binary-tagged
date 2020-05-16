@@ -16,21 +16,21 @@
 --   }
 --   deriving (Eq, Show, Generic)
 --
--- instance 'Binary' Record
+-- instance Binary Record
 -- instance 'Structured' Record
 -- @
 --
 -- then you can serialise and deserialise @Record@ values with a structure tag by simply
 --
 -- @
--- 'structuredEncode' record :: 'LBS.ByteString'
--- 'structuredDecode' lbs :: IO Record
+-- 'structuredEncode' record :: LBS.ByteString
+-- 'structuredDecode' lbs    :: Either String Record
 -- @
 --
 -- If structure of @Record@ changes in between, deserialisation will fail early.
 --
 -- Technically, 'Structured' is not related to 'Binary', and may
--- be useful in other uses.
+-- be useful in other ways.
 --
 module Data.Structured (
     -- * Structured class
@@ -41,11 +41,6 @@ module Data.Structured (
     GStructured,
     nominalStructure,
     containerStructure,
-    -- * MD5
-    MD5,
-    showMD5,
-    md5,
-    md5FromInteger,
     -- * Structure type
     Structure (..),
     TypeName,
@@ -55,6 +50,11 @@ module Data.Structured (
     hashStructure,
     typeVersion,
     typeName,
+    -- * MD5
+    MD5,
+    showMD5,
+    md5,
+    md5FromInteger,
     ) where
 
 import Data.Structured.Internal

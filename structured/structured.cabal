@@ -1,11 +1,13 @@
 cabal-version: 2.2
 name:          structured
 version:       0.1
-synopsis:      Tagged serialisation.
+synopsis:      Structure (hash) of your data types
 category:      Data
 description:
-  Calculate the has of the structure. It can be used as a magic
-  number for the data structure.
+  Calculate the hash of a data structure.
+  It can be used as a magic number for the serialization formats.
+  See <https://hackage.haskell.org/package/binary-tagged binary-tagged>
+  for a @binary@ bindings.
 
 bug-reports:   https://github.com/phadej/binary-tagged/issues
 author:        Oleg Grenrus <oleg.grenrus@iki.fi>
