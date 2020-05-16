@@ -1,0 +1,4 @@
+packages:   structured
+packages:   binary-tagged
+tests:      True
+benchmarks: True
