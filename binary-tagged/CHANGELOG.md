@@ -1,3 +1,6 @@
+- 0.3 (2020-05-16)
+    - Major rewrite: use `structured`.
+
 - 0.2 (2019-05-14)
     - use cryptohash-sha1,
       types of structuralInfoSha1Digest and structuralInfoSha1Digest are changed.
