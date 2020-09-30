@@ -1,7 +1,7 @@
 cabal-version: 2.2
 name:          structured
 version:       0.1
-x-revision:    1
+x-revision:    2
 synopsis:      Structure (hash) of your data types
 category:      Data
 description:
@@ -23,8 +23,8 @@ tested-with:
    || ==8.2.2
    || ==8.4.4
    || ==8.6.5
-   || ==8.8.3
-   || ==8.10.1
+   || ==8.8.4
+   || ==8.10.2
 
 source-repository head
   type:     git
@@ -51,8 +51,8 @@ library
 
   -- other dependencies
   build-depends:
-      aeson                 >=0.8     && <1.6
-    , base16-bytestring     >=0.1.1.6 && <0.2
+      aeson                 >=1.2.1.0 && <1.6
+    , base16-bytestring     >=0.1.1.6 && <1.1
     , hashable              >=1.2     && <1.4
     , scientific            >=0.3     && <0.4
     , tagged                >=0.7     && <0.9
