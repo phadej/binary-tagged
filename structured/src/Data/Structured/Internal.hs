@@ -31,32 +31,32 @@ import qualified Control.Monad.Trans.State.Strict as State
 
 import GHC.Generics
 
-import qualified Data.Aeson                   as Aeson
-import qualified Data.Array.IArray            as Array
-import qualified Data.Array.Unboxed           as Array
-import qualified Data.ByteString              as BS
-import qualified Data.ByteString.Lazy         as LBS
-import qualified Data.ByteString.Lazy.Builder as Builder
-import qualified Data.ByteString.Short        as SBS
-import qualified Data.Fixed                   as Fixed
-import qualified Data.HashMap.Lazy            as HML
-import qualified Data.HashSet                 as HS
-import qualified Data.IntMap                  as IM
-import qualified Data.IntSet                  as IS
-import qualified Data.Map                     as Map
-import qualified Data.Monoid                  as Monoid
-import qualified Data.Scientific              as Sci
-import qualified Data.Semigroup               as Semigroup
-import qualified Data.Sequence                as Seq
-import qualified Data.Set                     as Set
-import qualified Data.Text                    as T
-import qualified Data.Text.Lazy               as LT
-import qualified Data.Time.Compat             as Time
-import qualified Data.UUID.Types              as UUID
-import qualified Data.Vector                  as V
-import qualified Data.Vector.Storable         as SV
-import qualified Data.Vector.Unboxed          as UV
-import qualified Data.Version                 as Version
+import qualified Data.Aeson              as Aeson
+import qualified Data.Array.IArray       as Array
+import qualified Data.Array.Unboxed      as Array
+import qualified Data.ByteString         as BS
+import qualified Data.ByteString.Builder as Builder
+import qualified Data.ByteString.Lazy    as LBS
+import qualified Data.ByteString.Short   as SBS
+import qualified Data.Fixed              as Fixed
+import qualified Data.HashMap.Lazy       as HML
+import qualified Data.HashSet            as HS
+import qualified Data.IntMap             as IM
+import qualified Data.IntSet             as IS
+import qualified Data.Map                as Map
+import qualified Data.Monoid             as Monoid
+import qualified Data.Scientific         as Sci
+import qualified Data.Semigroup          as Semigroup
+import qualified Data.Sequence           as Seq
+import qualified Data.Set                as Set
+import qualified Data.Text               as T
+import qualified Data.Text.Lazy          as LT
+import qualified Data.Time.Compat        as Time
+import qualified Data.UUID.Types         as UUID
+import qualified Data.Vector             as V
+import qualified Data.Vector.Storable    as SV
+import qualified Data.Vector.Unboxed     as UV
+import qualified Data.Version            as Version
 
 #if __GLASGOW_HASKELL__ >= 800
 import Data.Kind (Type)
