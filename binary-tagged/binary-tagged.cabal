@@ -1,7 +1,6 @@
 cabal-version:      2.2
 name:               binary-tagged
-version:            0.3
-x-revision:         2
+version:            0.3.1
 synopsis:           Tagged binary serialisation.
 category:           Data
 description:
@@ -76,7 +75,7 @@ library
   ghc-options:      -Wall
 
   -- we build on top of structured
-  build-depends:    structured >=0.1 && <0.1.1
+  build-depends:    structured >=0.1.1 && <0.1.2
 
   -- Libraries bundled with GHC
   build-depends:

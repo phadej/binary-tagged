@@ -58,6 +58,11 @@ import qualified Data.Vector.Storable    as SV
 import qualified Data.Vector.Unboxed     as UV
 import qualified Data.Version            as Version
 
+#if MIN_VERSION_aeson(2,0,0)
+import qualified Data.Aeson.Key as Key
+import qualified Data.Aeson.KeyMap as KM
+#endif
+
 #if __GLASGOW_HASKELL__ >= 800
 import Data.Kind (Type)
 #else
@@ -433,6 +438,11 @@ instance (Structured i, Structured e) => Structured (Array.UArray i e) where
 -------------------------------------------------------------------------------
 
 instance Structured Aeson.Value
+
+#if MIN_VERSION_aeson(2,0,0)
+instance Structured Key.Key where structure = nominalStructure
+instance Structured v => Structured (KM.KeyMap v) where structure = containerStructure
+#endif
 
 -------------------------------------------------------------------------------
 -- unordered-containers

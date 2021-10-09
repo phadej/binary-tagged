@@ -1,6 +1,6 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE ScopedTypeVariables         #-}
-{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE Trustworthy         #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Data.Binary.Tagged

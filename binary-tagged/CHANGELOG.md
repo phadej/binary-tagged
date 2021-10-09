@@ -1,3 +1,6 @@
+- 0.3.1 (2021-10-10)
+    - Support `aeson-2.0.0.0`
+
 - 0.3 (2020-05-16)
     - Major rewrite: use `structured`.
 
