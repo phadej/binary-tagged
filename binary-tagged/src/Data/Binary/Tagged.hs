@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP                 #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE Trustworthy         #-}
 -----------------------------------------------------------------------------
@@ -131,11 +130,7 @@ structuredDecodeOrFailIO :: (Binary.Binary a, Structured a) => LBS.ByteString ->
 structuredDecodeOrFailIO bs =
     catch (evaluate (structuredDecode bs) >>= return . Right) handler
   where
-#if MIN_VERSION_base(4,9,0)
     handler (ErrorCallWithLocation str _) = return $ Left str
-#else
-    handler (ErrorCall str) = return $ Left str
-#endif
 
 -- | Lazily reconstruct a value previously written to a file.
 structuredDecodeFileOrFail :: (Binary.Binary a, Structured a) => FilePath -> IO (Either String a)

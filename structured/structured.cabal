@@ -1,7 +1,6 @@
 cabal-version:      2.2
 name:               structured
-version:            0.1.1
-x-revision:         8
+version:            0.1.2
 synopsis:           Structure (hash) of your data types
 category:           Data
 description:
@@ -18,19 +17,17 @@ license-file:       LICENSE
 build-type:         Simple
 extra-source-files: CHANGELOG.md
 tested-with:
-  GHC ==7.8.4
-   || ==7.10.3
-   || ==8.0.2
-   || ==8.2.2
-   || ==8.4.4
-   || ==8.6.5
+  GHC ==8.6.5
    || ==8.8.4
    || ==8.10.7
    || ==9.0.2
    || ==9.2.8
-   || ==9.4.7
-   || ==9.6.3
-   || ==9.8.1
+   || ==9.4.8
+   || ==9.6.7
+   || ==9.8.4
+   || ==9.10.3
+   || ==9.12.4
+   || ==9.14.1
 
 source-repository head
   type:     git
@@ -47,28 +44,19 @@ library
 
   -- Libraries bundled with GHC
   build-depends:
-    , array         ^>=0.5.0.0
-    , base          >=4.7.0.2  && <4.20
-    , binary        >=0.7.1.0  && <0.10
-    , bytestring    >=0.10.4.0 && <0.13
-    , containers    >=0.5.5.1  && <0.7
-    , text          ^>=1.2.3.0 || ^>=2.0 || ^>=2.1
-    , transformers  >=0.3.0.0  && <0.7
+    , array         ^>=0.5.3.0
+    , base          >=4.12.0.0  && <4.23
+    , bytestring    ^>=0.10.4.0 || ^>=0.11    || ^>=0.12.0.2
+    , containers    ^>=0.6.0.1  || ^>=0.7     || ^>=0.8
+    , text          ^>=1.2.3.0  || ^>=2.0     || ^>=2.1
+    , transformers  ^>=0.5.6.2  || ^>=0.6.1.0
 
   -- other dependencies
   build-depends:
-    , aeson                 >=1.2.1.0 && <1.6 || >=2.0.0.0 && <2.3
-    , base16-bytestring     >=0.1.1.6 && <1.1
-    , hashable              >=1.2     && <1.5
-    , scientific            ^>=0.3
-    , tagged                >=0.7     && <0.9
-    , time-compat           ^>=1.9.2.2
-    , unordered-containers  ^>=0.2
-    , uuid-types            ^>=1.0.3
-    , vector                >=0.10    && <0.14
-
-  if !impl(ghc >=8.0)
-    build-depends: semigroups >=0.18.5 && <0.21
-
-  if !impl(ghc >=7.10)
-    build-depends: nats ^>=1.1.2
+    , aeson                 ^>=2.2.3.0  || ^>=2.3.0.0
+    , scientific            ^>=0.3.8.0
+    , tagged                ^>=0.8.8
+    , time-compat           ^>=1.9.7
+    , unordered-containers  ^>=0.2.20
+    , uuid-types            ^>=1.0.6
+    , vector                ^>=0.13.1.0
